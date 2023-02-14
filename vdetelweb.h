@@ -9,11 +9,11 @@ extern char *banner;
 extern char *prompt;
 
 int sha1passwdok(const char *pw);
-int addpfd(int fd,voidfun cb);
+int addpfd(int fd, voidfun cb);
 void delpfd(int fn);
 int pfdsearch(int fd);
 int openextravdem();
-void telnet_init(int vdefd);
+void telnet_init();
 void web_init(int vdefd);
 
 void printlog(int priority, const char *format, ...);
