@@ -636,7 +636,15 @@ void manage_options(int argc, char *argv[], char **conffile, char **nodename)
     int option_index = 0;
 
     static struct option long_options[] = {
-        {"daemon", 0, 0, 'd'}, {"mgmt", 1, 0, 'M'}, {"telnet", 0, 0, 't'}, {"web", 0, 0, 'w'}, {"help", 0, 0, 'h'}, {"rcfile", 1, 0, 'f'}, {"nodename", 1, 0, 'n'}, {"pidfile", 1, 0, 'p'}, {0, 0, 0, 0}};
+        {"daemon", 0, 0, 'd'},
+        {"mgmt", 1, 0, 'M'},
+        {"telnet", 0, 0, 't'},
+        {"web", 0, 0, 'w'},
+        {"help", 0, 0, 'h'},
+        {"rcfile", 1, 0, 'f'},
+        {"nodename", 1, 0, 'n'},
+        {"pidfile", 1, 0, 'p'},
+        {0, 0, 0, 0}};
     c = getopt_long_only(argc, argv, "hdwtM:f:n:", long_options, &option_index);
     if (c == -1)
       break;
@@ -671,7 +679,7 @@ void manage_options(int argc, char *argv[], char **conffile, char **nodename)
   }
 }
 
-void set_up_daemonize()
+void setup_daemonize()
 {
   /* saves current path in pidfile_path, because otherwise with daemonize() we forget it */
   if (getcwd(pidfile_path, _POSIX_PATH_MAX - 1) == NULL)
@@ -740,7 +748,7 @@ void read_config_file(char *conffile)
   }
 }
 
-void daemon()
+void mydaemon()
 {
   int fd;
   if ((fd = open("/dev/null", O_RDWR)) >= 0)
@@ -781,12 +789,13 @@ int main(int argc, char *argv[])
   setsighandlers();
 
   if (daemonize)
-    set_up_daemonize();
+    setup_daemonize();
 
   vdefd = open_vde_mgmt(mgmt, nodename);
 
   // read_config_file(conffile); // todo decommenta
 
+  // temporary
   read_fake_ip();
   read_fake_route();
   read_pass("e8b32ad31b34a21d9fa638c2ee6cf52d46d5106b", 1);
@@ -802,7 +811,7 @@ int main(int argc, char *argv[])
     web_init(vdefd);
 
   if (daemonize)
-    daemon();
+    mydaemon();
 
   handle(vdefd);
 }
