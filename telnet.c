@@ -49,7 +49,6 @@
 
 void telnetdata(int fn, int fd, int vdefd)
 {
-  printf("ciaoo2\n");
   (void)fd;
   (void)vdefd;
   struct vdehiststat *vdehst = status[fn];
@@ -70,7 +69,6 @@ void telnetdata(int fn, int fd, int vdefd)
 
 void telnet_vdedata(int fn, int fd, int vdefd)
 {
-  printf("ciaoo3\n");
   (void)fd;
   (void)vdefd;
   struct vdehiststat *vdehst = status[fn];
@@ -79,7 +77,6 @@ void telnet_vdedata(int fn, int fd, int vdefd)
 
 char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st)
 {
-  printf("ciaoo4\n");
   int histstatus = vdehist_getstatus(st);
   int termfd = vdehist_gettermfd(st);
   switch (histstatus)
@@ -136,7 +133,6 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st)
 
 void telnetaccept(int fn, int fd, int vdefd)
 {
-  printf("ciaoo1\n");
   (void)fn;
   (void)vdefd;
   struct sockaddr_in cli_addr;
@@ -148,10 +144,7 @@ void telnetaccept(int fn, int fd, int vdefd)
   newsockfd = ioth_accept(fd, (struct sockaddr *)&cli_addr, &clilen);
 
   if (newsockfd < 0)
-  {
     printlog(LOG_ERR, "telnet accept err: %s", strerror(errno));
-    exit(-1);
-  }
 
   newfn = addpfd(newsockfd, telnetdata);
   status[newfn] = vdehist_new(newsockfd, -1);
@@ -159,20 +152,17 @@ void telnetaccept(int fn, int fd, int vdefd)
   ioth_write(newsockfd, "\r\nLogin: ", 9);
 }
 
-void telnet_init()
+void telnet_init(struct ioth *iothstack)
 {
   int sockfd;
   struct sockaddr_in serv_addr;
   vdehist_termread = ioth_read;
   vdehist_termwrite = ioth_write;
   vdehist_logincmd = telnet_logincmd;
-  sockfd = ioth_socket(AF_INET, SOCK_STREAM, 0);
+  sockfd = ioth_msocket(iothstack, AF_INET, SOCK_STREAM, 0);
 
   if (!sockfd)
-  {
     printlog(LOG_ERR, "telnet socket err: %s", strerror(errno));
-    exit(-1);
-  }
 
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
@@ -180,10 +170,7 @@ void telnet_init()
   serv_addr.sin_port = htons(TEMPTELNET_TCP_PORT); // se setto la 23 mi da problemi di permessi
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-  {
     printlog(LOG_ERR, "telnet bind err: %s", strerror(errno));
-    exit(-1);
-  }
 
   ioth_listen(sockfd, 5);
 

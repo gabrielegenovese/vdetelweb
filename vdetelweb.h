@@ -3,6 +3,8 @@
 #define BUFSIZE 1024
 typedef void (*voidfun)();
 
+#include <ioth.h>
+
 extern void *status[];
 
 extern char *banner;
@@ -13,8 +15,8 @@ int addpfd(int fd, voidfun cb);
 void delpfd(int fn);
 int pfdsearch(int fd);
 int openextravdem();
-void telnet_init();
-void web_init(int vdefd);
+void telnet_init(struct ioth *iothstack);
+void web_init(struct ioth *iothstack, int vdefd);
 
 void printlog(int priority, const char *format, ...);
 

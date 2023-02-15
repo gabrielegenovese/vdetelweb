@@ -771,11 +771,11 @@ void webaccept(int fn, int fd, int vdefd)
   st->bufindex = 0;
 }
 
-void web_init(int vdefd)
+void web_init(struct ioth *iothsocket, int vdefd)
 {
   int sockfd;
   struct sockaddr_in serv_addr;
-  sockfd = ioth_socket(AF_INET, SOCK_STREAM, 0);
+  sockfd = ioth_msocket(iothsocket, AF_INET, SOCK_STREAM, 0);
 
   if (!sockfd)
   {

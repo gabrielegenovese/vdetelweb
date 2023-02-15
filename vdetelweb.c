@@ -96,7 +96,7 @@ void printlog(int priority, const char *format, ...)
   }
   va_end(arg);
 
-  if (LOG_ERR)
+  if (priority == LOG_ERR)
     exit(-1);
 }
 
@@ -282,14 +282,14 @@ static void read_ip(char *full_ip, int af)
   case PF_INET:
   {
     uint8_t ip[] = {0, 0, 0, 0};
-    int j = 0, c = 0;
-    char *num = malloc(sizeof(char) * 8);
+    int i, j = 0, c = 0;
+    char *num = malloc(sizeof(char) * 5);
 
-    for (int i = 0; full_ip[i] != '/'; i++)
+    for (i = 0; i < 18; i++) // todo change 18 with const
     {
-      if (full_ip[i] == '.')
+      if (full_ip[i] == '.' || full_ip[i] == '/')
       {
-        num[c] = '\r';
+        num[c] = '\0';
         ip[j] = atoi(num);
         j++;
         c = 0;
@@ -299,11 +299,13 @@ static void read_ip(char *full_ip, int af)
         num[c] = full_ip[i];
         c++;
       }
+      if (full_ip[i] == '/')
+        break;
     }
 
+    free(num);
     if (ioth_ipaddr_add(iothstack, af, ip, netmask, ifnet) < 0)
       printlog(LOG_ERR, "Couldn't add ip");
-    free(num);
   }
   break;
   case PF_INET6:
@@ -321,14 +323,14 @@ static void read_route_ip(char *full_ip, int af)
   case PF_INET:
   {
     uint8_t ip[] = {0, 0, 0, 0};
-    int j = 0, c = 0;
-    char *num = malloc(sizeof(char) * 8);
+    int i, j = 0, c = 0;
+    char *num = malloc(sizeof(char) * 5);
 
-    for (int i = 0; full_ip[i] != '/'; i++)
+    for (i = 0; i < 18; i++) // todo change 18 with const
     {
-      if (full_ip[i] == '.')
+      if (full_ip[i] == '.' || full_ip[i] == '\0')
       {
-        num[c] = '\r';
+        num[c] = '\0';
         ip[j] = atoi(num);
         j++;
         c = 0;
@@ -338,11 +340,13 @@ static void read_route_ip(char *full_ip, int af)
         num[c] = full_ip[i];
         c++;
       }
+      if (full_ip[i] == '\0')
+        break;
     }
 
+    free(num);
     if (ioth_iproute_add(iothstack, af, NULL, 0, ip, ifnet) < 0)
       printlog(LOG_ERR, "Couldn't add route ip");
-    free(num);
   }
   break;
   case PF_INET6:
@@ -373,7 +377,7 @@ struct cf
            {"password", read_pass, 0},
            {NULL, NULL, 0}};
 
-int readconffile(char *path)
+int read_conffile(char *path)
 {
   FILE *f;
   char buf[BUFSIZE], *s;
@@ -613,8 +617,7 @@ void handle(int vdefd)
   while (1)
   {
     int i;
-    int m = poll(pfd, npfd, -1); // todo controlla
-    printf("evento!\n");         // todo remove
+    int m = poll(pfd, npfd, -1);
     for (i = 0; i < npfd && m > 0; i++)
     {
       if (pfd[i].revents)
@@ -629,7 +632,7 @@ void handle(int vdefd)
 void read_config_file(char *conffile)
 {
   /* If rcfile is specified, try it and nothing else */
-  if (conffile && readconffile(conffile) < 0)
+  if (conffile && read_conffile(conffile) < 0)
     printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
   /* Else try default ones */
   else if (!conffile)
@@ -641,11 +644,11 @@ void read_config_file(char *conffile)
       int len = strlen(homedir) + strlen(USERCONFFILE) + 1;
       conffile = malloc(len);
       snprintf(conffile, len, "%s%s", homedir, USERCONFFILE);
-      if ((rv = readconffile(conffile)) >= 0)
+      if ((rv = read_conffile(conffile)) >= 0)
         free(conffile);
     }
     if (!homedir || rv < 0)
-      rv = readconffile(conffile = ROOTCONFFILE);
+      rv = read_conffile(conffile = ROOTCONFFILE);
 
     if (rv < 0)
       printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
@@ -691,9 +694,9 @@ int main(int argc, char *argv[])
     save_pidfile();
 
   if (telnet)
-    telnet_init();
+    telnet_init(iothstack);
   if (web)
-    web_init(vdefd);
+    web_init(iothstack, vdefd);
 
   if (daemonize)
     start_daemon();
