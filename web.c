@@ -27,17 +27,17 @@
  */
 #include "vdetelweb.h"
 #include <arpa/inet.h>
-// #include <config.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <ioth.h>
 #include <linux/un.h>
-// #include <lwipv6.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
@@ -45,9 +45,6 @@
 #include <sys/types.h>
 #include <syslog.h>
 #include <unistd.h>
-
-#include <stdlib.h>
-#include <ioth.h>
 
 #define WEB_TCP_PORT 80
 #define TEMPWEB_TCP_PORT 8080

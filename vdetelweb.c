@@ -78,6 +78,8 @@ void *status[MAXFD];
 #define USERCONFFILE "/.vde/vdetelwebrc"
 #define ROOTCONFFILE "/etc/vde/vdetelwebrc"
 
+static char hex[] = "0123456789abcdef";
+
 void printlog(int priority, const char *format, ...)
 {
   va_list arg;
@@ -93,17 +95,18 @@ void printlog(int priority, const char *format, ...)
     fprintf(stderr, "\n");
   }
   va_end(arg);
+
+  if (LOG_ERR)
+    exit(-1);
 }
 
-static void cleanup(void)
+static void cleanup()
 {
   if (iothstack && ioth_delstack(iothstack) < 0)
     printlog(LOG_WARNING, "Couldn't free iothstack: %s", strerror(errno));
   if ((pidfile != NULL) && unlink(pidfile_path) < 0)
     printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 }
-
-static char hex[] = "0123456789abcdef";
 
 int sha1passwdok(const char *pw)
 {
@@ -133,7 +136,7 @@ static void sig_handler(int sig)
   kill(getpid(), sig);
 }
 
-static void setsighandlers(void)
+static void setsighandlers()
 {
   /* setting signal handlers.
    *    * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
@@ -193,7 +196,7 @@ void setprompt(char *ctrl, char *nodename)
   prompt = strdup(buf);
 }
 
-int openextravdem(void)
+int openextravdem()
 {
   struct sockaddr_un sun;
   int fd, n;
@@ -203,8 +206,7 @@ int openextravdem(void)
   fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0)
   {
-    printlog(LOG_ERR, "Error connecting to the management socket '%s': %s",
-             mgmt, strerror(errno));
+    printlog(LOG_ERR, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
     return (-1);
   }
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
@@ -229,15 +231,13 @@ int open_vde_mgmt(char *mgmt, char *nodename)
   fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0)
   {
-    printlog(LOG_ERR, "Error connecting to the management socket '%s': %s",
-             mgmt, strerror(errno));
+    printlog(LOG_ERR, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
     exit(-1);
   }
 
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
   {
-    printlog(LOG_ERR, "Error reading banner from VDE switch: %s",
-             strerror(errno));
+    printlog(LOG_ERR, "Error reading banner from VDE switch: %s", strerror(errno));
     exit(-1);
   }
 
@@ -249,8 +249,7 @@ int open_vde_mgmt(char *mgmt, char *nodename)
   voidn = write(fd, "ds/showinfo\n", 12);
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
   {
-    printlog(LOG_ERR, "Error reading ctl socket from VDE switch: %s",
-             strerror(errno));
+    printlog(LOG_ERR, "Error reading ctl socket from VDE switch: %s", strerror(errno));
     exit(-1);
   }
 
@@ -276,144 +275,109 @@ int open_vde_mgmt(char *mgmt, char *nodename)
   setprompt(ctrl, nodename);
 
   iothstack = ioth_newstack("vdestack", ctrl);
-
   ifnet = ioth_if_nametoindex(iothstack, "vde0");
 
   if (ioth_linksetupdown(iothstack, ifnet, 1) < 0)
   {
-    printlog(LOG_ERR, "Error link set up failed");
+    printlog(LOG_ERR, "Error: link set up failed");
     exit(-1);
   }
 
   return fd;
 }
 
-static void bitno2mask(unsigned char *addr, int bitno, int len)
+static void read_ip(char *full_ip, int af)
 {
-  int i;
-  for (i = 0; i < len; i++, bitno -= 8)
-  {
-    if (bitno >= 8)
-      addr[i] = 255;
-    else if (bitno <= 0)
-      addr[i] = 0;
-    else
-      addr[i] = 256 - (1 << (8 - bitno));
-  }
-}
+  char *bit = rindex(full_ip, '/');
 
-static void sockaddr2ip_6addr(struct ip_addr *ipaddrp, unsigned char *addr)
-{
-  IP6_ADDR(ipaddrp, (addr[0] << 8) | addr[1], (addr[2] << 8) | addr[3],
-           (addr[4] << 8) | addr[5], (addr[6] << 8) | addr[7],
-           (addr[8] << 8) | addr[9], (addr[10] << 8) | addr[11],
-           (addr[12] << 8) | addr[13], (addr[14] << 8) | addr[15]);
-}
-
-// todo correggere tutta sta funzione
-static void readip(char *arg, int af)
-{
-  char *bit = rindex(arg, '/');
   if (bit == 0)
-    printlog(LOG_ERR, "IP addresses must include the netmask i.e. addr/maskbits");
-  else
   {
-    int bitno = atoi(bit + 1);
-    // *bit = 0;
-    struct addrinfo *res, hint;
-    struct ip_addr ipaddr; //, netmask;
-    int err;
-    memset(&hint, 0, sizeof(hint));
-    hint.ai_family = af;
-    if ((err = getaddrinfo(arg, NULL, &hint, &res)) != 0)
-      printlog(LOG_ERR, "IP address %s error %s", arg, gai_strerror(err));
-    else
+    printlog(LOG_ERR, "IP addresses must include the netmask i.e. addr/maskbits");
+    exit(-1);
+  }
+
+  int netmask = atoi(bit + 1);
+
+  switch (af)
+  {
+  case PF_INET:
+  {
+    uint8_t ip[] = {0, 0, 0, 0};
+    int j = 0, c = 0;
+    char *num = malloc(sizeof(char) * 8);
+
+    for (int i = 0; full_ip[i] != '/'; i++)
     {
-      switch (res->ai_family)
+      if (full_ip[i] == '.')
       {
-      case PF_INET:
+        num[c] = '\r';
+        ip[j] = atoi(num);
+        j++;
+        c = 0;
+      }
+      else
       {
-        struct sockaddr_in *in = (struct sockaddr_in *)res->ai_addr;
-        int addrh = ntohl(in->sin_addr.s_addr);
-        unsigned char i, addr[4];
-        for (i = 0; i < 4; i++, addrh >>= 8)
-          addr[3 - i] = addrh;
-        IP64_ADDR(&ipaddr, addr[0], addr[1], addr[2], addr[3]);
-
-        uint8_t ipv4addr[] = {10, 0, 3, 10}; // todo correggere tutta sta funzione
-        if (ioth_ipaddr_add(iothstack, AF_INET, ipv4addr, 24, ifnet) < 0)
-        {
-          printlog(LOG_ERR, "Couldn't add ip");
-          exit(-1);
-        }
+        num[c] = full_ip[i];
+        c++;
       }
-      break;
-      case PF_INET6:
-      {
-        struct sockaddr_in6 *in = (struct sockaddr_in6 *)res->ai_addr;
-        unsigned char *addr = in->sin6_addr.s6_addr;
-        sockaddr2ip_6addr(&ipaddr, addr);
-        // bitno2mask(addr, bitno, 16);
-        // sockaddr2ip_6addr(&netmask, addr);
-
-        // todo controlla argomenti (int family, void *addr, int prefixlen,
-        // unsigned int ifindex);
-        // ioth_ipaddr_add(iothstack, AF_INET6, ipaddr.addr, bitno, -1);
-      }
-      break;
-      default:
-        printlog(LOG_ERR, "Unsupported Address Family: %s", arg);
-      }
-      freeaddrinfo(res);
     }
+
+    if (ioth_ipaddr_add(iothstack, af, ip, netmask, ifnet) < 0)
+    {
+      printlog(LOG_ERR, "Couldn't add ip");
+      exit(-1);
+    }
+    free(num);
+  }
+  break;
+  case PF_INET6:
+    // todo da fare
+    break;
+  default:
+    printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
+    exit(-1);
   }
 }
 
-// todo correggere tutta sta funzione
-static void readdefroute(char *arg, int af)
+static void read_route_ip(char *full_ip, int af)
 {
-  struct addrinfo *res, hint;
-  struct ip_addr ipaddr;
-  int err;
-  memset(&hint, 0, sizeof(hint));
-  hint.ai_family = af;
-  if ((err = getaddrinfo(arg, NULL, &hint, &res)) != 0)
-    printlog(LOG_ERR, "IP address %s error %s", arg, gai_strerror(err));
-  else
+  switch (af)
   {
-    switch (res->ai_family)
-    {
-    case PF_INET:
-    {
-      struct sockaddr_in *in = (struct sockaddr_in *)res->ai_addr;
-      int addrh = ntohl(in->sin_addr.s_addr);
-      unsigned char i, addr[4];
-      for (i = 0; i < 4; i++, addrh >>= 8)
-        addr[3 - i] = addrh;
-      IP64_ADDR(&ipaddr, addr[0], addr[1], addr[2], addr[3]);
+  case PF_INET:
+  {
+    uint8_t ip[] = {0, 0, 0, 0};
+    int j = 0, c = 0;
+    char *num = malloc(sizeof(char) * 8);
 
-      uint8_t ipv4gw[] = {10, 0, 3, 1}; // todo remove
-      if (ioth_iproute_add(iothstack, AF_INET, NULL, 0, ipv4gw, ifnet) < 0)
+    for (int i = 0; full_ip[i] != '/'; i++)
+    {
+      if (full_ip[i] == '.')
       {
-        printlog(LOG_ERR, "Couldn't add route ip");
-        exit(-1);
+        num[c] = '\r';
+        ip[j] = atoi(num);
+        j++;
+        c = 0;
+      }
+      else
+      {
+        num[c] = full_ip[i];
+        c++;
       }
     }
-    break;
-    case PF_INET6:
-    {
-      struct sockaddr_in6 *in = (struct sockaddr_in6 *)res->ai_addr;
-      sockaddr2ip_6addr(&ipaddr, in->sin6_addr.s6_addr);
 
-      // todo controllare
-      // ioth_iproute_add(iothstack, AF_INET6, NULL, 0, ipaddr.addr, 0);
-      // lwip_add_route(iothstack, IP_ADDR_ANY, IP_ADDR_ANY, &ipaddr, nif, 0);
+    if (ioth_iproute_add(iothstack, af, NULL, 0, ip, ifnet) < 0)
+    {
+      printlog(LOG_ERR, "Couldn't add route ip");
+      exit(-1);
     }
+    free(num);
+  }
+  break;
+  case PF_INET6:
+    // todo da fare
     break;
-    default:
-      printlog(LOG_ERR, "Unsupported Address Family: %s", arg);
-    }
-    freeaddrinfo(res);
+  default:
+    printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
   }
 }
 
@@ -423,37 +387,17 @@ static void read_pass(char *arg, int unused)
   passwd = strdup(arg);
 }
 
-static void read_fake_ip()
-{
-  uint8_t ipv4addr[] = {10, 0, 3, 10};
-  if (ioth_ipaddr_add(iothstack, AF_INET, ipv4addr, 24, ifnet) < 0)
-  {
-    printlog(LOG_ERR, "Couldn't add ip");
-    exit(-1);
-  }
-}
-
-static void read_fake_route()
-{
-  uint8_t ipv4gw[] = {10, 0, 3, 1};
-  if (ioth_iproute_add(iothstack, AF_INET, NULL, 0, ipv4gw, ifnet) < 0)
-  {
-    printlog(LOG_ERR, "Couldn't add route ip");
-    exit(-1);
-  }
-}
-
 struct cf
 {
   char *tag;
   void (*f)();
   int arg;
-} cft[] = {{"ip4", readip, PF_INET},
-           {"ip6", readip, PF_INET6},
-           {"ip", readip, 0},
-           {"defroute4", readdefroute, PF_INET},
-           {"defroute6", readdefroute, PF_INET6},
-           {"defroute", readdefroute, 0},
+} cft[] = {{"ip4", read_ip, PF_INET},
+           {"ip6", read_ip, PF_INET6},
+           {"ip", read_ip, 0},
+           {"defroute4", read_route_ip, PF_INET},
+           {"defroute6", read_route_ip, PF_INET6},
+           {"defroute", read_route_ip, 0},
            {"password", read_pass, 0},
            {NULL, NULL, 0}};
 
@@ -628,6 +572,7 @@ static int special_daemon(void)
   return 0;
 }
 
+/* Set option and exit if mngmt and telnet or web is not defined */
 void manage_options(int argc, char *argv[], char **conffile, char **nodename)
 {
   int c;
@@ -677,6 +622,20 @@ void manage_options(int argc, char *argv[], char **conffile, char **nodename)
       break;
     }
   }
+
+  if (optind < argc && mgmt == NULL)
+    mgmt = argv[optind];
+
+  if (mgmt == NULL)
+  {
+    printlog(LOG_ERR, "mgmt_socket not defined");
+    exit(-1);
+  }
+  if (telnet == 0 && web == 0)
+  {
+    printlog(LOG_ERR, "at least one service option (-t -w) must be specified");
+    exit(-1);
+  }
 }
 
 void setup_daemonize()
@@ -704,7 +663,7 @@ void handle(int vdefd)
   {
     int i;
     int m = poll(pfd, npfd, -1); // todo controlla
-    printf("evento!\n");
+    printf("evento!\n");         // todo remove
     for (i = 0; i < npfd && m > 0; i++)
     {
       if (pfd[i].revents)
@@ -720,10 +679,7 @@ void read_config_file(char *conffile)
 {
   /* If rcfile is specified, try it and nothing else */
   if (conffile && readconffile(conffile) < 0)
-  {
     printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
-    exit(1);
-  }
   /* Else try default ones */
   else if (!conffile)
   {
@@ -741,14 +697,11 @@ void read_config_file(char *conffile)
       rv = readconffile(conffile = ROOTCONFFILE);
 
     if (rv < 0)
-    {
       printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
-      exit(1);
-    }
   }
 }
 
-void mydaemon()
+void start_daemon()
 {
   int fd;
   if ((fd = open("/dev/null", O_RDWR)) >= 0)
@@ -771,20 +724,6 @@ int main(int argc, char *argv[])
 
   manage_options(argc, argv, &conffile, &nodename);
 
-  if (optind < argc && mgmt == NULL)
-    mgmt = argv[optind];
-
-  if (mgmt == NULL)
-  {
-    printlog(LOG_ERR, "mgmt_socket not defined");
-    exit(-1);
-  }
-  if (telnet == 0 && web == 0)
-  {
-    printlog(LOG_ERR, "at least one service option (-t -w) must be specified");
-    exit(-1);
-  }
-
   atexit(cleanup);
   setsighandlers();
 
@@ -793,12 +732,7 @@ int main(int argc, char *argv[])
 
   vdefd = open_vde_mgmt(mgmt, nodename);
 
-  // read_config_file(conffile); // todo decommenta
-
-  // temporary
-  read_fake_ip();
-  read_fake_route();
-  read_pass("e8b32ad31b34a21d9fa638c2ee6cf52d46d5106b", 1);
+  read_config_file(conffile);
 
   /* once here, we're sure we're the true process which will continue as a
    * server: save PID file if needed */
@@ -811,7 +745,7 @@ int main(int argc, char *argv[])
     web_init(vdefd);
 
   if (daemonize)
-    mydaemon();
+    start_daemon();
 
   handle(vdefd);
 }
