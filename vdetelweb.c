@@ -206,12 +206,12 @@ int openextravdem()
   fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0)
   {
-    printlog(LOG_ERR, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
+    printlog(LOG_WARNING, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
     return (-1);
   }
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
   {
-    printlog(LOG_ERR, "banner %s", strerror(errno));
+    printlog(LOG_WARNING, "banner %s", strerror(errno));
     return (-1);
   }
   return fd;
@@ -230,16 +230,10 @@ int open_vde_mgmt(char *mgmt, char *nodename)
 
   fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0)
-  {
     printlog(LOG_ERR, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
-    exit(-1);
-  }
 
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
-  {
     printlog(LOG_ERR, "Error reading banner from VDE switch: %s", strerror(errno));
-    exit(-1);
-  }
 
   buf[n] = 0;
   if ((ctrl = rindex(buf, '\n')) != NULL)
@@ -248,24 +242,15 @@ int open_vde_mgmt(char *mgmt, char *nodename)
 
   voidn = write(fd, "ds/showinfo\n", 12);
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
-  {
     printlog(LOG_ERR, "Error reading ctl socket from VDE switch: %s", strerror(errno));
-    exit(-1);
-  }
 
   buf[n] = 0;
   if ((line2 = index(buf, '\n')) == NULL)
-  {
     printlog(LOG_ERR, "Error parsing first line of ctl socket information");
-    exit(-1);
-  }
 
   line2++;
   if (strncmp(line2, "ctl dir ", 8) != 0)
-  {
     printlog(LOG_ERR, "Error parsing ctl socket information");
-    exit(-1);
-  }
 
   for (ctrl = line2 + 8; *ctrl != '\n' && ctrl < buf + n; ctrl++)
     ;
@@ -278,10 +263,7 @@ int open_vde_mgmt(char *mgmt, char *nodename)
   ifnet = ioth_if_nametoindex(iothstack, "vde0");
 
   if (ioth_linksetupdown(iothstack, ifnet, 1) < 0)
-  {
     printlog(LOG_ERR, "Error: link set up failed");
-    exit(-1);
-  }
 
   return fd;
 }
@@ -291,10 +273,7 @@ static void read_ip(char *full_ip, int af)
   char *bit = rindex(full_ip, '/');
 
   if (bit == 0)
-  {
     printlog(LOG_ERR, "IP addresses must include the netmask i.e. addr/maskbits");
-    exit(-1);
-  }
 
   int netmask = atoi(bit + 1);
 
@@ -323,10 +302,7 @@ static void read_ip(char *full_ip, int af)
     }
 
     if (ioth_ipaddr_add(iothstack, af, ip, netmask, ifnet) < 0)
-    {
       printlog(LOG_ERR, "Couldn't add ip");
-      exit(-1);
-    }
     free(num);
   }
   break;
@@ -335,7 +311,6 @@ static void read_ip(char *full_ip, int af)
     break;
   default:
     printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
-    exit(-1);
   }
 }
 
@@ -366,10 +341,7 @@ static void read_route_ip(char *full_ip, int af)
     }
 
     if (ioth_iproute_add(iothstack, af, NULL, 0, ip, ifnet) < 0)
-    {
       printlog(LOG_ERR, "Couldn't add route ip");
-      exit(-1);
-    }
     free(num);
   }
   break;
@@ -504,22 +476,13 @@ static void save_pidfile(void)
   FILE *f;
 
   if (fd == -1)
-  {
     printlog(LOG_ERR, "Error in pidfile creation: %s", strerror(errno));
-    exit(1);
-  }
 
   if ((f = fdopen(fd, "w")) == NULL)
-  {
     printlog(LOG_ERR, "Error in FILE* construction: %s", strerror(errno));
-    exit(1);
-  }
 
   if (fprintf(f, "%ld\n", (long int)getpid()) <= 0)
-  {
     printlog(LOG_ERR, "Error in writing pidfile");
-    exit(1);
-  }
 
   fclose(f);
 }
@@ -627,34 +590,22 @@ void manage_options(int argc, char *argv[], char **conffile, char **nodename)
     mgmt = argv[optind];
 
   if (mgmt == NULL)
-  {
     printlog(LOG_ERR, "mgmt_socket not defined");
-    exit(-1);
-  }
   if (telnet == 0 && web == 0)
-  {
     printlog(LOG_ERR, "at least one service option (-t -w) must be specified");
-    exit(-1);
-  }
 }
 
 void setup_daemonize()
 {
   /* saves current path in pidfile_path, because otherwise with daemonize() we forget it */
   if (getcwd(pidfile_path, _POSIX_PATH_MAX - 1) == NULL)
-  {
     printlog(LOG_ERR, "getcwd: %s", strerror(errno));
-    exit(1);
-  }
   strcat(pidfile_path, "/");
 
   /* call daemon before starting the stack otherwise the stack threads
    * does not get inherited by the forked process */
   if (special_daemon())
-  {
     printlog(LOG_ERR, "daemon: %s", strerror(errno));
-    exit(1);
-  }
 }
 
 void handle(int vdefd)
