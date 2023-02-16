@@ -47,7 +47,8 @@
 #include <unistd.h>
 
 #define WEB_TCP_PORT 80
-#define TEMPWEB_TCP_PORT 8080
+#define TEMPWEB_TCP_PORT 8080 // todo remove
+
 #define WEB_IDENTIFY 0x0
 #define WEB_AUTHORIZED 0x1
 #define WEB_UNAUTHORIZED 0x2
@@ -760,9 +761,7 @@ void webaccept(int fn, int fd, int vdefd)
   newsockfd = ioth_accept(fd, (struct sockaddr *)&cli_addr, &clilen);
 
   if (newsockfd < 0)
-  {
     printlog(LOG_ERR, "web accept err: %s", strerror(errno));
-  }
 
   newfn = addpfd(newsockfd, webdata);
   status[newfn] = st = malloc(sizeof(struct webstat));
@@ -778,21 +777,15 @@ void web_init(struct ioth *iothsocket, int vdefd)
   sockfd = ioth_msocket(iothsocket, AF_INET, SOCK_STREAM, 0);
 
   if (!sockfd)
-  {
     printlog(LOG_ERR, "web socket err: %s", strerror(errno));
-    exit(-1);
-  }
 
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(TEMPWEB_TCP_PORT); // stesso problema di telnet
+  serv_addr.sin_port = htons(TEMPWEB_TCP_PORT); // stesso problema di telnet; todo: capire
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-  {
     printlog(LOG_ERR, "web bind err: %s", strerror(errno));
-    exit(-1);
-  }
 
   ioth_listen(sockfd, 5);
 

@@ -208,12 +208,12 @@ int open_extra_vde_mgmt()
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0)
   {
     printlog(LOG_WARNING, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
-    return (-1);
+    return -1;
   }
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
   {
     printlog(LOG_WARNING, "banner %s", strerror(errno));
-    return (-1);
+    return -1;
   }
   return fd;
 }
@@ -261,10 +261,10 @@ int open_vde_mgmt(char *mgmt, char *nodename)
   setprompt(ctrl, nodename);
 
   iothstack = ioth_newstack("vdestack", ctrl);
-  ifnet = ioth_if_nametoindex(iothstack, "vde0");
+  ifnet = ioth_if_nametoindex(iothstack, "vde0"); // todo: giusto mettere vde0?
 
   if (ioth_linksetupdown(iothstack, ifnet, 1) < 0)
-    printlog(LOG_ERR, "Error: link set up failed");
+    printlog(LOG_ERR, "Error: link set up failed: %s", strerror(errno));
 
   return fd;
 }
@@ -276,7 +276,7 @@ static void read_ip(char *full_ip, int af)
   if (bit == 0)
     printlog(LOG_ERR, "IP addresses must include the netmask i.e. addr/maskbits");
 
-  int netmask = atoi(bit + 1);
+  int err, netmask = atoi(bit + 1);
   *bit = '\0';
 
   switch (af)
@@ -284,7 +284,8 @@ static void read_ip(char *full_ip, int af)
   case PF_INET:
   {
     uint8_t ipv4[4];
-    inet_pton(af, full_ip, &ipv4);
+    if ((err = inet_pton(af, full_ip, &ipv4) <= 0))
+      printlog(LOG_ERR, "Convertion ipv4 error: %s", strerror(errno));
 
     if (ioth_ipaddr_add(iothstack, af, ipv4, netmask, ifnet) < 0)
       printlog(LOG_ERR, "Couldn't add ip");
@@ -293,7 +294,8 @@ static void read_ip(char *full_ip, int af)
   case PF_INET6:
   {
     uint16_t ipv6[8];
-    inet_pton(af, full_ip, &ipv6);
+    if ((err = inet_pton(af, full_ip, &ipv6) <= 0))
+      printlog(LOG_ERR, "Convertion ipv6 error: %s", strerror(errno));
 
     if (ioth_ipaddr_add(iothstack, af, ipv6, netmask, ifnet) < 0)
       printlog(LOG_ERR, "Couldn't add ip");
@@ -306,24 +308,27 @@ static void read_ip(char *full_ip, int af)
 
 static void read_route_ip(char *full_ip, int af)
 {
+  int err;
   switch (af)
   {
   case PF_INET:
   {
     uint8_t ipv4[4];
-    inet_pton(af, full_ip, &ipv4);
+    if ((err = inet_pton(af, full_ip, &ipv4) <= 0))
+      printlog(LOG_ERR, "Convertion route ipv4 error: %s", strerror(errno));
 
     if (ioth_iproute_add(iothstack, af, NULL, 0, ipv4, ifnet) < 0)
-      printlog(LOG_ERR, "Couldn't add route ip");
+      printlog(LOG_ERR, "Couldn't add route ipv4: %s", strerror(errno));
   }
   break;
   case PF_INET6:
   {
     uint16_t ipv6[8];
-    inet_pton(af, full_ip, &ipv6);
+    if ((err = inet_pton(af, full_ip, &ipv6) <= 0))
+      printlog(LOG_ERR, "Convertion route ipv6 error: %s", strerror(errno));
 
     if (ioth_iproute_add(iothstack, af, NULL, 0, ipv6, ifnet) < 0)
-      printlog(LOG_ERR, "Couldn't add ip");
+      printlog(LOG_ERR, "Couldn't add ipv6: %s", strerror(errno));
   }
   break;
   default:
@@ -409,8 +414,7 @@ int addpfd(int fd, voidfun cb)
 
 void delpfd(int fn)
 {
-  int i = fn;
-  for (i = fn; i < npfd - 1; i++)
+  for (int i = fn; i < npfd - 1; i++)
   {
     pfd[i] = pfd[i + 1];
     fpfd[i] = fpfd[i + 1];
@@ -430,15 +434,17 @@ int pfdsearch(int fd)
 #if 0
 int setfds(fd_set *rds, fd_set *exc)
 {
-	int i,max=0;
-	FD_ZERO(rds);
-	FD_ZERO(exc);
-	for (i=0;i<npfd;i++) {
-		FD_SET(pfd[i].fd,rds);
-		FD_SET(pfd[i].fd,exc);
-		if (pfd[i].fd>max) max=pfd[i].fd;
-	}
-	return max+1;
+  int i, max = 0;
+  FD_ZERO(rds);
+  FD_ZERO(exc);
+  for (i = 0; i < npfd; i++)
+  {
+    FD_SET(pfd[i].fd, rds);
+    FD_SET(pfd[i].fd, exc);
+    if (pfd[i].fd > max)
+      max = pfd[i].fd;
+  }
+  return max + 1;
 }
 #endif
 
@@ -449,8 +455,7 @@ static void save_pidfile(void)
   else
     strcpy(pidfile_path, pidfile);
 
-  int fd = open(pidfile_path, O_WRONLY | O_CREAT | O_EXCL,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  int fd = open(pidfile_path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   FILE *f;
 
   if (fd == -1)
@@ -482,7 +487,7 @@ static int special_daemon(void)
   switch (fork())
   {
   case -1:
-    return (-1);
+    return -1;
   case 0:
     break;
   default:
@@ -495,7 +500,7 @@ static int special_daemon(void)
   close(errorpipe[0]);
 
   if (setsid() == -1)
-    return (-1);
+    return -1;
 
   voidn = chdir("/");
 
@@ -512,13 +517,11 @@ static int special_daemon(void)
 }
 
 /* Set option and exit if mngmt and telnet or web is not defined */
-void manage_options(int argc, char *argv[], char **conffile, char **nodename)
+void manage_args(int argc, char *argv[], char **conffile, char **nodename)
 {
-  int c;
   while (1)
   {
     int option_index = 0;
-
     static struct option long_options[] = {
         {"daemon", 0, 0, 'd'},
         {"mgmt", 1, 0, 'M'},
@@ -529,7 +532,7 @@ void manage_options(int argc, char *argv[], char **conffile, char **nodename)
         {"nodename", 1, 0, 'n'},
         {"pidfile", 1, 0, 'p'},
         {0, 0, 0, 0}};
-    c = getopt_long_only(argc, argv, "hdwtM:f:n:", long_options, &option_index);
+    int c = getopt_long_only(argc, argv, "hdwtM:f:n:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -561,7 +564,6 @@ void manage_options(int argc, char *argv[], char **conffile, char **nodename)
       break;
     }
   }
-
   if (optind < argc && mgmt == NULL)
     mgmt = argv[optind];
 
@@ -588,9 +590,8 @@ void handle(int vdefd)
 {
   while (1)
   {
-    int i;
     int m = poll(pfd, npfd, -1);
-    for (i = 0; i < npfd && m > 0; i++)
+    for (int i = 0; i < npfd && m > 0; i++)
     {
       if (pfd[i].revents)
       {
@@ -601,7 +602,7 @@ void handle(int vdefd)
   }
 }
 
-void read_config_file(char *conffile)
+void check_and_read_conffile(char *conffile)
 {
   /* If rcfile is specified, try it and nothing else */
   if (conffile && read_conffile(conffile) < 0)
@@ -609,7 +610,7 @@ void read_config_file(char *conffile)
   /* Else try default ones */
   else if (!conffile)
   {
-    int rv;
+    int rv = -1;
     char *homedir = getenv("HOME");
     if (homedir)
     {
@@ -648,7 +649,7 @@ int main(int argc, char *argv[])
   char *nodename = NULL;
   progname = argv[0];
 
-  manage_options(argc, argv, &conffile, &nodename);
+  manage_args(argc, argv, &conffile, &nodename);
 
   atexit(cleanup);
   setsighandlers();
@@ -658,7 +659,7 @@ int main(int argc, char *argv[])
 
   vdefd = open_vde_mgmt(mgmt, nodename);
 
-  read_config_file(conffile);
+  check_and_read_conffile(conffile);
 
   /* once here, we're sure we're the true process which will continue as a
    * server: save PID file if needed */
