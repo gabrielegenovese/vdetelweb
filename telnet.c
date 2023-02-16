@@ -112,7 +112,7 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st)
       int flags;
       int mgmtfd;
       vdehist_setstatus(st, HIST_COMMAND);
-      mgmtfd = openextravdem();
+      mgmtfd = open_extra_vde_mgmt();
       if (mgmtfd >= 0)
       {
         vdehist_setmgmtfd(st, mgmtfd);

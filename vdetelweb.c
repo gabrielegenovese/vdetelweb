@@ -80,6 +80,7 @@ void *status[MAXFD];
 
 static char hex[] = "0123456789abcdef";
 
+/* print log and exit if priority is LOG_ERR */
 void printlog(int priority, const char *format, ...)
 {
   va_list arg;
@@ -102,7 +103,7 @@ void printlog(int priority, const char *format, ...)
 
 static void cleanup()
 {
-  if (iothstack && ioth_delstack(iothstack) < 0)
+  if (iothstack && ioth_delstack(iothstack) < 0) // todo xontrollare
     printlog(LOG_WARNING, "Couldn't free iothstack: %s", strerror(errno));
   if ((pidfile != NULL) && unlink(pidfile_path) < 0)
     printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
@@ -196,7 +197,7 @@ void setprompt(char *ctrl, char *nodename)
   prompt = strdup(buf);
 }
 
-int openextravdem()
+int open_extra_vde_mgmt()
 {
   struct sockaddr_un sun;
   int fd, n;
@@ -276,41 +277,28 @@ static void read_ip(char *full_ip, int af)
     printlog(LOG_ERR, "IP addresses must include the netmask i.e. addr/maskbits");
 
   int netmask = atoi(bit + 1);
+  *bit = '\0';
 
   switch (af)
   {
   case PF_INET:
   {
-    uint8_t ip[] = {0, 0, 0, 0};
-    int i, j = 0, c = 0;
-    char *num = malloc(sizeof(char) * 5);
+    uint8_t ipv4[4];
+    inet_pton(af, full_ip, &ipv4);
 
-    for (i = 0; i < 18; i++) // todo change 18 with const
-    {
-      if (full_ip[i] == '.' || full_ip[i] == '/')
-      {
-        num[c] = '\0';
-        ip[j] = atoi(num);
-        j++;
-        c = 0;
-      }
-      else
-      {
-        num[c] = full_ip[i];
-        c++;
-      }
-      if (full_ip[i] == '/')
-        break;
-    }
-
-    free(num);
-    if (ioth_ipaddr_add(iothstack, af, ip, netmask, ifnet) < 0)
+    if (ioth_ipaddr_add(iothstack, af, ipv4, netmask, ifnet) < 0)
       printlog(LOG_ERR, "Couldn't add ip");
   }
   break;
   case PF_INET6:
-    // todo da fare
-    break;
+  {
+    uint16_t ipv6[8];
+    inet_pton(af, full_ip, &ipv6);
+
+    if (ioth_ipaddr_add(iothstack, af, ipv6, netmask, ifnet) < 0)
+      printlog(LOG_ERR, "Couldn't add ip");
+  }
+  break;
   default:
     printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
   }
@@ -322,36 +310,22 @@ static void read_route_ip(char *full_ip, int af)
   {
   case PF_INET:
   {
-    uint8_t ip[] = {0, 0, 0, 0};
-    int i, j = 0, c = 0;
-    char *num = malloc(sizeof(char) * 5);
+    uint8_t ipv4[4];
+    inet_pton(af, full_ip, &ipv4);
 
-    for (i = 0; i < 18; i++) // todo change 18 with const
-    {
-      if (full_ip[i] == '.' || full_ip[i] == '\0')
-      {
-        num[c] = '\0';
-        ip[j] = atoi(num);
-        j++;
-        c = 0;
-      }
-      else
-      {
-        num[c] = full_ip[i];
-        c++;
-      }
-      if (full_ip[i] == '\0')
-        break;
-    }
-
-    free(num);
-    if (ioth_iproute_add(iothstack, af, NULL, 0, ip, ifnet) < 0)
+    if (ioth_iproute_add(iothstack, af, NULL, 0, ipv4, ifnet) < 0)
       printlog(LOG_ERR, "Couldn't add route ip");
   }
   break;
   case PF_INET6:
-    // todo da fare
-    break;
+  {
+    uint16_t ipv6[8];
+    inet_pton(af, full_ip, &ipv6);
+
+    if (ioth_iproute_add(iothstack, af, NULL, 0, ipv6, ifnet) < 0)
+      printlog(LOG_ERR, "Couldn't add ip");
+  }
+  break;
   default:
     printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
   }
@@ -370,10 +344,10 @@ struct cf
   int arg;
 } cft[] = {{"ip4", read_ip, PF_INET},
            {"ip6", read_ip, PF_INET6},
-           {"ip", read_ip, 0},
+           {"ip", read_ip, PF_INET}, // ipv4 default
            {"defroute4", read_route_ip, PF_INET},
            {"defroute6", read_route_ip, PF_INET6},
-           {"defroute", read_route_ip, 0},
+           {"defroute", read_route_ip, PF_INET}, // ipv4 default
            {"password", read_pass, 0},
            {NULL, NULL, 0}};
 
@@ -493,13 +467,12 @@ static void save_pidfile(void)
 
 /* this custom version of daemon(3) continue to receive stderr messages
  * until the end of the startup phase, the foreground process terminates
- * when stderr gets closed*/
+ * when stderr gets closed */
 static int special_daemon(void)
 {
-  int fd;
+  int fd, n;
   int errorpipe[2];
   char buf[256];
-  int n;
   ssize_t voidn;
   (void)voidn;
 
@@ -515,9 +488,8 @@ static int special_daemon(void)
   default:
     close(errorpipe[1]);
     while ((n = read(errorpipe[0], buf, 128)) > 0)
-    {
       voidn = write(STDERR_FILENO, buf, n);
-    }
+
     _exit(0);
   }
   close(errorpipe[0]);
