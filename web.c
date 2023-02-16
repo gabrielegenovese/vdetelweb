@@ -59,8 +59,7 @@
 const char b64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 // static char *base64passwd;
-struct webstat
-{
+struct webstat {
   unsigned char status;
   unsigned char op;
   unsigned int bodylen;
@@ -69,24 +68,17 @@ struct webstat
   unsigned int bufindex;
 };
 
-static void lowercase(char *s)
-{
-  while (*s != 0)
-  {
+static void lowercase(char *s) {
+  while (*s != 0) {
     *s = tolower(*s);
     s++;
   }
 }
 
-void encode64(const char *from, char *to, int tosize)
-{
+void encode64(const char *from, char *to, int tosize) {
+  int convbuf, n = strlen(from);
 
-  int convbuf;
-  int n = strlen(from);
-
-  while ((n > 0) && (tosize > 3))
-  {
-
+  while ((n > 0) && (tosize > 3)) {
     convbuf = *from;
     from++;
     n--;
@@ -109,16 +101,13 @@ void encode64(const char *from, char *to, int tosize)
   *to = 0;
 }
 
-void decode64(const char *src, char *dest, int dest_size)
-{
+void decode64(const char *src, char *dest, int dest_size) {
   (void)dest_size;
 
   int convbuf;
-  int l = strlen(src);
+  int i, j, l = strlen(src);
   char c_src[l + 1];
   char *c;
-
-  int i, j;
 
   strcpy(c_src, src);
 
@@ -127,9 +116,7 @@ void decode64(const char *src, char *dest, int dest_size)
     *c = 'A';
 
   /* Convert 4 byte in 6 bit (64) to 3 byte in 8 bit */
-  for (i = 0, j = 0; i < l; i += 4, j += 3)
-  {
-
+  for (i = 0, j = 0; i < l; i += 4, j += 3) {
     convbuf = (((int)(strchr(b64_chars, c_src[i]) - b64_chars) << 18) +
                ((int)(strchr(b64_chars, c_src[i + 1]) - b64_chars) << 12) +
                ((int)(strchr(b64_chars, c_src[i + 2]) - b64_chars) << 6) +
@@ -153,8 +140,7 @@ static void createbase64passwd()
 }
 #endif
 
-static void ioth_printf(int fd, const char *format, ...)
-{
+static void ioth_printf(int fd, const char *format, ...) {
   char outbuf[BUFSIZE];
   va_list arg;
   va_start(arg, format);
@@ -162,48 +148,39 @@ static void ioth_printf(int fd, const char *format, ...)
   ioth_write(fd, outbuf, strlen(outbuf));
 }
 
-static void web_close(int fn, int fd)
-{
+static void web_close(int fn, int fd) {
   // printf("web_close %d %d\n",fn,fd);
   free(status[fn]);
   delpfd(fn);
   ioth_close(fd);
 }
 
-static int vde_getanswer(voidfun f, void *arg, int vdefd)
-{
+static int vde_getanswer(voidfun f, void *arg, int vdefd) {
   char buf[BUFSIZE];
   char linebuf[BUFSIZE + 1];
   int n = 0, ib = 0, il = 0, indata = 0, eoa = 0;
-  do
-  {
+  do {
     n = read(vdefd, buf, BUFSIZE);
     if (n == 0)
       exit(0);
-    for (ib = 0; ib < n; ib++)
-    {
+    for (ib = 0; ib < n; ib++) {
       linebuf[il++] = buf[ib];
-      if (buf[ib] == '\n')
-      {
+      if (buf[ib] == '\n') {
         linebuf[il - 1] = '\r';
         linebuf[il] = '\n';
         linebuf[il + 1] = 0;
         il++;
-        if (indata)
-        {
+        if (indata) {
           if (linebuf[0] == '.' && linebuf[1] == '\r')
             indata = 0;
           else
             f(arg, linebuf, il, indata, 0);
-        }
-        else if (strncmp(linebuf, "0000", 4) == 0)
+        } else if (strncmp(linebuf, "0000", 4) == 0)
           indata = 1;
-        else
-        {
+        else {
           if (linebuf[0] == '1' && linebuf[1] >= '0' && linebuf[1] <= '9' &&
               linebuf[2] >= '0' && linebuf[2] <= '9' && linebuf[3] >= '0' &&
-              linebuf[3] <= '9')
-          {
+              linebuf[3] <= '9') {
             f(arg, linebuf + 5, il - 5, 0, atoi(linebuf));
             eoa = atoi(linebuf);
           }
@@ -215,16 +192,14 @@ static int vde_getanswer(voidfun f, void *arg, int vdefd)
   return (eoa);
 }
 
-struct vdesub
-{
+struct vdesub {
   char *name;
   char *descr;
   char *syntax;
   struct vdesub *next;
 };
 
-struct vdemenu
-{
+struct vdemenu {
   char *name;
   char *descr;
   struct vdesub *sub;
@@ -233,8 +208,7 @@ struct vdemenu
 
 static struct vdemenu *menuhead;
 
-static struct vdemenu *vde_findmenu(struct vdemenu *head, char *name)
-{
+static struct vdemenu *vde_findmenu(struct vdemenu *head, char *name) {
   if (head == NULL)
     return NULL;
   else if (strcmp(head->name, name) == 0)
@@ -243,28 +217,21 @@ static struct vdemenu *vde_findmenu(struct vdemenu *head, char *name)
     return vde_findmenu(head->next, name);
 }
 
-static void vde_addsub(struct vdesub **headp, char *name, char *syntax,
-                       char *help)
-{
-  if (*headp == NULL)
-  {
+static void vde_addsub(struct vdesub **headp, char *name, char *syntax, char *help) {
+  if (*headp == NULL) {
     *headp = malloc(sizeof(struct vdesub));
-    if (*headp != NULL)
-    {
+    if (*headp != NULL) {
       (*headp)->name = name;
       (*headp)->descr = help;
       (*headp)->syntax = syntax;
       (*headp)->next = NULL;
     }
-  }
-  else
+  } else
     vde_addsub(&((*headp)->next), name, syntax, help);
 }
 
-static void vde_addcmd(struct vdemenu *head, char *menu, char *name, char *syntax, char *help)
-{
-  if (head != NULL)
-  {
+static void vde_addcmd(struct vdemenu *head, char *menu, char *name, char *syntax, char *help) {
+  if (head != NULL) {
     if (strcmp(head->name, menu) == 0)
       vde_addsub(&(head->sub), name, syntax, help);
     else
@@ -272,32 +239,25 @@ static void vde_addcmd(struct vdemenu *head, char *menu, char *name, char *synta
   }
 }
 
-static void vde_addmenu(struct vdemenu **headp, char *name, char *help)
-{
-  if (*headp == NULL)
-  {
+static void vde_addmenu(struct vdemenu **headp, char *name, char *help) {
+  if (*headp == NULL) {
     *headp = malloc(sizeof(struct vdemenu));
-    if (*headp != NULL)
-    {
+    if (*headp != NULL) {
       (*headp)->name = name;
       (*headp)->descr = help;
       (*headp)->sub = NULL;
       (*headp)->next = NULL;
     }
-  }
-  else
+  } else
     vde_addmenu(&((*headp)->next), name, help);
 }
 
-static void vde_helpline(struct vdemenu **headp, char *buf, int len, int indata,
-                         int rv)
-{
+static void vde_helpline(struct vdemenu **headp, char *buf, int len, int indata, int rv) {
   (void)rv;
   static int nl = 0;
   static int syntaxpos, helppos;
   nl++;
-  if (nl == 2)
-  {
+  if (nl == 2) {
     int i;
     for (i = 0; i < len && buf[i] == '-'; i++)
       ;
@@ -309,29 +269,23 @@ static void vde_helpline(struct vdemenu **headp, char *buf, int len, int indata,
     for (; i < len && buf[i] == ' '; i++)
       ;
     helppos = i;
-  }
-  else if (nl > 2 && indata && (strncmp(buf, "debug", 5) != 0))
-  {
+  } else if (nl > 2 && indata && (strncmp(buf, "debug", 5) != 0)) {
     char *name;
     char *syntax;
     char *help;
     int namelen;
     for (namelen = 0; namelen < syntaxpos && buf[namelen] != ' '; namelen++)
       ;
-    if (strncmp(buf + syntaxpos, "======", 5) == 0)
-    {
+    if (strncmp(buf + syntaxpos, "======", 5) == 0) {
       /* MENU */
       name = strndup(buf, namelen);
       help = strndup(buf + helppos, len - helppos - 2);
       vde_addmenu(headp, name, help);
-    }
-    else
-    {
+    } else {
       int slash;
       for (slash = 0; slash < namelen && buf[slash] != '/'; slash++)
         ;
-      if (slash < namelen)
-      {
+      if (slash < namelen) {
         int synlen;
         buf[slash] = 0;
         slash++;
@@ -351,8 +305,7 @@ static void vde_helpline(struct vdemenu **headp, char *buf, int len, int indata,
   }
 }
 
-static struct vdemenu *vde_gethelp(int vdefd)
-{
+static struct vdemenu *vde_gethelp(int vdefd) {
   ssize_t voidn;
   (void)voidn;
   struct vdemenu *head = NULL;
@@ -361,20 +314,17 @@ static struct vdemenu *vde_gethelp(int vdefd)
   return head;
 }
 
-static void ioth_showline(int *fdp, char *buf, int len, int indata, int rv)
-{
+static void ioth_showline(int *fdp, char *buf, int len, int indata, int rv) {
   (void)rv;
   if (indata)
     ioth_write(*fdp, buf, len);
 }
 
-static int ioth_showout(int fd, int vdefd)
-{
+static int ioth_showout(int fd, int vdefd) {
   return vde_getanswer(ioth_showline, &fd, vdefd);
 }
 
-static int hex2num(int c)
-{
+static int hex2num(int c) {
   if (c > 96)
     c -= 32;
   c -= '0';
@@ -383,16 +333,13 @@ static int hex2num(int c)
   return c;
 }
 
-static char *uriconv(char *in)
-{
+static char *uriconv(char *in) {
   char *s = in;
   char *t = in;
-  while ((*t = *s) != 0)
-  {
+  while ((*t = *s) != 0) {
     if (*s == '+')
       *t = ' ';
-    if (*s == '%')
-    {
+    if (*s == '%') {
       *t = (hex2num(*(s + 1)) << 4) + hex2num(*(s + 2));
       s += 2;
     }
@@ -402,40 +349,32 @@ static char *uriconv(char *in)
   return in;
 }
 
-static void postdata_parse(int fd, int vdefd, char *menu, char *postdata)
-{
+static void postdata_parse(int fd, int vdefd, char *menu, char *postdata) {
   char cmdbuf[BUFSIZE + 1];
   int cmdlen, arglen, rv;
   char *postcmd, *cmd, *endcmd, *arg = NULL;
   /*printf("PD **%s**\n",postdata);*/
-  if ((postcmd = strstr(postdata, "X=")) != NULL)
-  {
+  if ((postcmd = strstr(postdata, "X=")) != NULL) {
     /* enter in a text field (catched through the hidden button) */
     cmd = NULL;
-    while (postdata)
-    {
+    while (postdata) {
       char *token = strsep(&postdata, "&");
       int l = strlen(token);
       char *targ = index(token, '=');
-      if (strncmp("X=", token, 2) != 0)
-      {
-        if (targ + 1 < token + l)
-        {
-          if (cmd == NULL)
-          {
+      if (strncmp("X=", token, 2) != 0) {
+        if (targ + 1 < token + l) {
+          if (cmd == NULL) {
             char *point;
             if ((point = strstr(token, ".arg")) != NULL)
               *point = 0;
             cmd = token;
             arg = targ + 1;
-          }
-          else
+          } else
             cmd = "";
         }
       }
     }
-    if (cmd != NULL && *cmd != 0)
-    {
+    if (cmd != NULL && *cmd != 0) {
       ssize_t voidn;
       (void)voidn;
       strncpy(cmdbuf, menu, BUFSIZE);
@@ -448,9 +387,7 @@ static void postdata_parse(int fd, int vdefd, char *menu, char *postdata)
       rv = ioth_showout(fd, vdefd);
       ioth_printf(fd, "</PRE><B>Result: %s</B>\r\n", strerror(rv - 1000));
     }
-  }
-  else if ((postcmd = strstr(postdata, "COMMAND=")) != NULL)
-  {
+  } else if ((postcmd = strstr(postdata, "COMMAND=")) != NULL) {
     /* accept button */
     ssize_t voidn;
     (void)voidn;
@@ -463,20 +400,17 @@ static void postdata_parse(int fd, int vdefd, char *menu, char *postdata)
     strncat(cmdbuf, postcmd, (BUFSIZE < cmdlen) ? BUFSIZE : cmdlen);
     endcmd = cmdbuf + strlen(cmdbuf);
     strncat(cmdbuf, ".arg", BUFSIZE);
-    if ((arg = strstr(postdata, cmd)) != NULL)
-    {
+    if ((arg = strstr(postdata, cmd)) != NULL) {
       arg += strlen(cmd) + 1;
       for (arglen = 0; arg[arglen] != '&' && arg[arglen] != 0; arglen++)
         ;
       arg[arglen] = 0;
       *endcmd = 0;
-      if (*arg != 0)
-      {
+      if (*arg != 0) {
         strncat(cmdbuf, " ", BUFSIZE);
         strncat(cmdbuf, uriconv(arg), BUFSIZE);
       }
-    }
-    else
+    } else
       *endcmd = 0;
     voidn = write(vdefd, cmdbuf, strlen(cmdbuf));
     ioth_printf(fd, "<P> </P><B>%s %s</B><PRE>", prompt, cmdbuf);
@@ -520,13 +454,10 @@ static char errmsg[] = "HTTP/1.1 404 Not Found\r\n"
                        "<hr>VDE 2.0 WEB MGMT INTERFACE\r\n"
                        "</BODY></HTML>\r\n";
 
-static void web_this_form(int fd, struct vdemenu *this)
-{
+static void web_this_form(int fd, struct vdemenu *this) {
   struct vdesub *sub;
-  for (sub = this->sub; sub != NULL; sub = sub->next)
-  {
-    if (*(sub->syntax) == 0)
-    {
+  for (sub = this->sub; sub != NULL; sub = sub->next) {
+    if (*(sub->syntax) == 0) {
       ioth_printf(fd,
                   "<TR><TD width=50><INPUT type=submit size=100 name=\"%s\" "
                   "value=\"%s\"></TD>\r\n"
@@ -534,9 +465,7 @@ static void web_this_form(int fd, struct vdemenu *this)
                   "<TD width=100></TD>\r\n"
                   "<TD width=300>%s</TD></TR>\r\n",
                   "COMMAND", sub->name, sub->descr);
-    }
-    else
-    {
+    } else {
       ioth_printf(fd,
                   "<TR><TD width=50><INPUT type=submit size=100 name=\"%s\" "
                   "value=\"%s\"></TD>\r\n"
@@ -548,8 +477,7 @@ static void web_this_form(int fd, struct vdemenu *this)
   }
 }
 
-static void web_menu_index(int fd)
-{
+static void web_menu_index(int fd) {
   struct vdemenu *this;
   ioth_printf(fd, "<P><A HREF=\"index.html\">Home Page</A></P>\r\n");
   for (this = menuhead; this != NULL; this = this->next)
@@ -557,16 +485,14 @@ static void web_menu_index(int fd)
                 this->name);
 }
 
-static void web_create_page(char *path, int fd, int vdefd, char *postdata)
-{
+static void web_create_page(char *path, int fd, int vdefd, char *postdata) {
   struct vdemenu *this = NULL;
   char *tail;
   ssize_t voidn;
   (void)voidn;
   if ((tail = strstr(path, ".html")) != NULL)
     *tail = 0;
-  if (*path == 0 || ((this = vde_findmenu(menuhead, path)) != NULL))
-  {
+  if (*path == 0 || ((this = vde_findmenu(menuhead, path)) != NULL)) {
     ioth_write(fd, okmsg, sizeof(okmsg) - 1);
     ioth_printf(fd,
                 "<HTML><HEAD>\r\n"
@@ -580,8 +506,7 @@ static void web_create_page(char *path, int fd, int vdefd, char *postdata)
                 "class=sidebar>",
                 prompt, (*path == 0) ? "Home Page" : this->descr);
     web_menu_index(fd);
-    if (*path == 0)
-    { /* HOME PAGE */
+    if (*path == 0) { /* HOME PAGE */
       int rv;
       voidn = write(vdefd, "showinfo\r\n", 10);
       ioth_printf(fd, "</TD><TD><PRE>\r\n");
@@ -589,9 +514,7 @@ static void web_create_page(char *path, int fd, int vdefd, char *postdata)
       ioth_printf(fd, "</PRE>\r\n");
       if (rv != 1000)
         ioth_printf(fd, "<B>%s</B>\r\n", strerror(rv - 1000));
-    }
-    else
-    {
+    } else {
       ioth_printf(
           fd,
           "</TD><TD><FORM action=\"%s.html\" method=post "
@@ -602,16 +525,14 @@ static void web_create_page(char *path, int fd, int vdefd, char *postdata)
           path);
       web_this_form(fd, this);
       ioth_printf(fd, "</TABLE></FORM>\r\n");
-      if (postdata != NULL)
-      {
+      if (postdata != NULL) {
         postdata_parse(fd, vdefd, path, postdata);
       }
     }
     ioth_printf(fd, "</TD></TABLE>\r\n"
                     "<hr>VDE 2.0 WEB MGMT INTERFACE\r\n"
                     "</BODY></HTML>\r\n");
-  }
-  else
+  } else
     ioth_write(fd, errmsg, sizeof(errmsg) - 1);
 }
 
@@ -631,38 +552,28 @@ static char authmsg2[] = "\"\r\n"
                          "<hr>\r\nVDE 2.0 WEB MGMT INTERFACE\r\n"
                          "</BODY></HTML>\r\n";
 
-int web_core(int fn, int fd, int vdefd)
-{
+int web_core(int fn, int fd, int vdefd) {
   struct webstat *st = status[fn];
   // printf("CORE %s\n",st->linebuf);
-  if (st->op == WEB_OP_POSTDATA)
-  {
+  if (st->op == WEB_OP_POSTDATA) {
     // printf("POSTDATA %s\n",st->linebuf);
     web_create_page(&(st->path[1]), fd, vdefd, st->linebuf);
     return 1;
-  }
-  else if (strncmp(st->linebuf, "GET", 3) == 0)
-  {
+  } else if (strncmp(st->linebuf, "GET", 3) == 0) {
     // printf("GET %s\n",st->linebuf);
     sscanf(st->linebuf + 4, "%s", st->path);
     st->op = WEB_OP_GET;
     return 0;
-  }
-  else if (strncmp(st->linebuf, "POST", 3) == 0)
-  {
+  } else if (strncmp(st->linebuf, "POST", 3) == 0) {
     // printf("POST %s\n",st->linebuf);
     sscanf(st->linebuf + 5, "%s", st->path);
     st->op = WEB_OP_POST;
     return 0;
-  }
-  else if (strncmp(st->linebuf, "Content-Length: ", 16) == 0)
-  {
+  } else if (strncmp(st->linebuf, "Content-Length: ", 16) == 0) {
     st->bodylen = atoi(st->linebuf + 16);
     // printf("BODYLEN %d\n",st->bodylen);
     return 0;
-  }
-  else if (strncmp(st->linebuf, "Authorization: Basic", 20) == 0)
-  {
+  } else if (strncmp(st->linebuf, "Authorization: Basic", 20) == 0) {
     char passwd_buf[BUFSIZE];
     char *passwd_buf_shift;
     int len = strlen(st->linebuf);
@@ -670,22 +581,18 @@ int web_core(int fn, int fd, int vdefd)
     while (st->linebuf[k] == ' ')
       k++;
     while (st->linebuf[len - 1] == '\n' || st->linebuf[len - 1] == '\r' ||
-           st->linebuf[len - 1] == ' ')
-    {
+           st->linebuf[len - 1] == ' ') {
       len--;
       st->linebuf[len] = 0;
     }
     /* SHA1 */
     decode64((st->linebuf + k), passwd_buf, strlen(st->linebuf + k));
     passwd_buf_shift = (char *)(strchr(passwd_buf, ':') + 1);
-    if (sha1passwdok(passwd_buf_shift))
+    if (is_password_correct(passwd_buf_shift))
       st->status = WEB_AUTHORIZED;
     return 0;
-  }
-  else if (st->linebuf[0] == '\n' || st->linebuf[0] == '\r')
-  {
-    switch (st->status)
-    {
+  } else if (st->linebuf[0] == '\n' || st->linebuf[0] == '\r') {
+    switch (st->status) {
     case WEB_IDENTIFY:
       ioth_write(fd, authmsg, sizeof(authmsg) - 1);
       ioth_write(fd, prompt, strlen(prompt));
@@ -696,59 +603,46 @@ int web_core(int fn, int fd, int vdefd)
       lowercase(st->path);
       if (strcmp(st->path, "/index.html") == 0)
         st->path[1] = 0;
-      if (st->op == WEB_OP_GET)
-      {
+      if (st->op == WEB_OP_GET) {
         web_create_page(&(st->path[1]), fd, vdefd, NULL);
         return 1;
-      }
-      else
-      {
+      } else {
         st->op = WEB_OP_POSTDATA;
         return 0;
       }
     default:
       return 0;
     }
-  }
-  else
+  } else
     return 0;
 }
 
-void webdata(int fn, int fd, int vdefd)
-{
+void webdata(int fn, int fd, int vdefd) {
   char buf[BUFSIZE];
   int n, i;
   struct webstat *st = status[fn];
   n = ioth_read(fd, buf, BUFSIZE);
   if (n == 0)
-  {
     web_close(fn, fd);
-  }
   else if (n < 0)
     printlog(LOG_ERR, "web read err: %s", strerror(errno));
-  else
-  {
-    for (i = 0; i < n && st->bufindex < BUFSIZE; i++)
-    {
+  else {
+    for (i = 0; i < n && st->bufindex < BUFSIZE; i++) {
       st->linebuf[(st->bufindex)++] = buf[i];
       if (buf[i] == '\n' ||
-          (st->op == WEB_OP_POSTDATA && st->bufindex == st->bodylen))
-      {
+          (st->op == WEB_OP_POSTDATA && st->bufindex == st->bodylen)) {
         st->linebuf[(st->bufindex)] = 0;
-        if (web_core(fn, fd, vdefd))
-        {
+        if (web_core(fn, fd, vdefd)) {
           web_close(fn, fd);
           break;
-        }
-        else
+        } else
           st->bufindex = 0;
       }
     }
   }
 }
 
-void webaccept(int fn, int fd, int vdefd)
-{
+void webaccept(int fn, int fd, int vdefd) {
   (void)fn;
   (void)vdefd;
   struct sockaddr_in cli_addr;
@@ -770,8 +664,7 @@ void webaccept(int fn, int fd, int vdefd)
   st->bufindex = 0;
 }
 
-void web_init(struct ioth *iothsocket, int vdefd)
-{
+void web_init(struct ioth *iothsocket, int vdefd) {
   int sockfd;
   struct sockaddr_in serv_addr;
   sockfd = ioth_msocket(iothsocket, AF_INET, SOCK_STREAM, 0);

@@ -42,6 +42,10 @@ vdetelweb \- Virtual Distributed Ethernet Telnet and/or Web management module
 .BI \-\-rcfile
 .I rcfile
 ]
+[
+.BI \-\-pidfile
+.I pidfile
+]
 .I mgmt_socket
 .br
 .SH DESCRIPTION
@@ -68,6 +72,10 @@ run as a daemon, using syslog for logging.
 rc file to set the initial switch configuration.
 When not specified, vdetelweb searches for \fI~/.vde/vdetelwebrc\fP and
 \fI/etc/vde/vdetelwebrc\fP. At leas one rc file must exist and be readable.
+.TP
+.B \-f, \-\-pidfile \fIpidfile\fP
+file's path to set the pid of the main process. If the file doesn't exist,
+the programm will create it and remove it on close.
 .TP
 .B \-h, \-\-help
 print help. please use it for a more complete list of options.

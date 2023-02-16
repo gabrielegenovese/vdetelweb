@@ -47,19 +47,16 @@
 #define TELNET_TCP_PORT 23
 #define TEMPTELNET_TCP_PORT 2323 // todo remove
 
-void telnetdata(int fn, int fd, int vdefd)
-{
+void telnetdata(int fn, int fd, int vdefd) {
   (void)fd;
   (void)vdefd;
   struct vdehiststat *vdehst = status[fn];
-  if (vdehist_term_to_mgmt(vdehst) != 0)
-  {
+  if (vdehist_term_to_mgmt(vdehst) != 0) {
     int termfd = vdehist_gettermfd(vdehst);
     int mgmtfd = vdehist_getmgmtfd(vdehst);
     delpfd(pfdsearch(termfd));
     ioth_close(termfd);
-    if (mgmtfd >= 0)
-    {
+    if (mgmtfd >= 0) {
       delpfd(mgmtfd);
       close(mgmtfd);
     }
@@ -67,27 +64,23 @@ void telnetdata(int fn, int fd, int vdefd)
   }
 }
 
-void telnet_vdedata(int fn, int fd, int vdefd)
-{
+void telnet_vdedata(int fn, int fd, int vdefd) {
   (void)fd;
   (void)vdefd;
   struct vdehiststat *vdehst = status[fn];
   vdehist_mgmt_to_term(vdehst);
 }
 
-char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st)
-{
+char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st) {
   int histstatus = vdehist_getstatus(st);
   int termfd = vdehist_gettermfd(st);
-  switch (histstatus)
-  {
+  switch (histstatus) {
   case HIST_NOCMD:
     while (cmd[len - 1] == '\n')
       cmd[--len] = 0;
     if (strcmp(cmd, "admin") != 0)
       ioth_write(termfd, "login incorrect\r\n\r\nLogin: ", 26);
-    else
-    {
+    else {
       ioth_write(termfd, "Password: ", 11);
       vdehist_setstatus(st, HIST_PASSWDFLAG);
     }
@@ -97,33 +90,26 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st)
   case HIST_PASSWDFLAG + 2:
     while (cmd[len - 1] == '\n')
       cmd[--len] = 0;
-    if (!sha1passwdok(cmd))
-    {
+    if (!is_password_correct(cmd)) {
       histstatus++;
       vdehist_setstatus(st, histstatus);
       if (histstatus < (HIST_PASSWDFLAG + 3))
         ioth_write(termfd, "\r\nlogin incorrect\r\n\r\nPassword: ", 30);
       else
         return "logout";
-    }
-    else
-    {
-      int newfn;
-      int flags;
-      int mgmtfd;
+    } else {
+      int newfn, flags, mgmtfd;
       vdehist_setstatus(st, HIST_COMMAND);
-      mgmtfd = open_extra_vde_mgmt();
-      if (mgmtfd >= 0)
-      {
-        vdehist_setmgmtfd(st, mgmtfd);
-        flags = fcntl(mgmtfd, F_GETFL);
-        flags |= O_NONBLOCK;
-        fcntl(mgmtfd, F_SETFL, flags);
-        newfn = addpfd(mgmtfd, telnet_vdedata);
-        status[newfn] = st;
-      }
-      else
+
+      if ((mgmtfd = open_extra_vde_mgmt()) < 0)
         return "logout";
+
+      vdehist_setmgmtfd(st, mgmtfd);
+      flags = fcntl(mgmtfd, F_GETFL);
+      flags |= O_NONBLOCK;
+      fcntl(mgmtfd, F_SETFL, flags);
+      newfn = addpfd(mgmtfd, telnet_vdedata);
+      status[newfn] = st;
       ioth_write(termfd, "\r\n", 2);
       ioth_write(termfd, prompt, strlen(prompt));
     }
@@ -131,19 +117,14 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st)
   return NULL;
 }
 
-void telnetaccept(int fn, int fd, int vdefd)
-{
+void telnetaccept(int fn, int fd, int vdefd) {
   (void)fn;
   (void)vdefd;
   struct sockaddr_in cli_addr;
-  int newsockfd;
-  unsigned int clilen;
-  int newfn;
+  int newsockfd, newfn;
+  uint32_t cli_len = sizeof(cli_addr);
 
-  clilen = sizeof(cli_addr);
-  newsockfd = ioth_accept(fd, (struct sockaddr *)&cli_addr, &clilen);
-
-  if (newsockfd < 0)
+  if ((newsockfd = ioth_accept(fd, (struct sockaddr *)&cli_addr, &cli_len)) < 0)
     printlog(LOG_ERR, "telnet accept err: %s", strerror(errno));
 
   newfn = addpfd(newsockfd, telnetdata);
@@ -152,22 +133,20 @@ void telnetaccept(int fn, int fd, int vdefd)
   ioth_write(newsockfd, "\r\nLogin: ", 9);
 }
 
-void telnet_init(struct ioth *iothstack)
-{
+void telnet_init(struct ioth *iothstack) {
   int sockfd;
   struct sockaddr_in serv_addr;
   vdehist_termread = ioth_read;
   vdehist_termwrite = ioth_write;
   vdehist_logincmd = telnet_logincmd;
-  sockfd = ioth_msocket(iothstack, AF_INET, SOCK_STREAM, 0);
 
-  if (!sockfd)
+  if ((sockfd = ioth_msocket(iothstack, AF_INET, SOCK_STREAM, 0)) == 0)
     printlog(LOG_ERR, "telnet socket err: %s", strerror(errno));
 
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(TEMPTELNET_TCP_PORT); // se setto la 23 mi da problemi di permessi; todo: capire
+  serv_addr.sin_port = htons(TEMPTELNET_TCP_PORT); // se setto la 23 mi da problemi di permessi, todo: capire
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "telnet bind err: %s", strerror(errno));

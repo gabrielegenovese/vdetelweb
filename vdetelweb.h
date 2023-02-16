@@ -10,7 +10,7 @@ extern void *status[];
 extern char *banner;
 extern char *prompt;
 
-int sha1passwdok(const char *pw);
+int is_password_correct(const char *pw);
 int addpfd(int fd, voidfun cb);
 void delpfd(int fn);
 int pfdsearch(int fd);
