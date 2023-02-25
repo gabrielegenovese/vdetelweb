@@ -9,6 +9,7 @@
  *                            (copied from vde_switch code).
  *   2008 updated Renzo Davoli
  *   2008 sha1sum by Marco Dalla Via
+ *   migration from lwip to libioth by Gabriele Genovese 2023
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -36,10 +37,11 @@
 #include <libgen.h>
 #include <limits.h>
 #include <linux/un.h>
-#include <lwipv6.h>
 #include <mhash.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -57,6 +59,12 @@
 int daemonize;
 int telnet;
 int web;
+int vdefd;
+char *conffile = NULL;
+char *nodename = NULL;
+char *cert = NULL;
+char *key = NULL;
+char *ip = NULL;
 char *mgmt;
 char *banner;
 char *progname;
@@ -67,7 +75,12 @@ static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
 struct ioth *iothstack;
 
+extern SSL *ssl;
+extern SSL_CTX *ctx;
+extern int is_ssl_enable;
+
 #define UP 1
+#define DOWN 0
 #define MAXFD 16
 #define HASH_SIZE 40
 int npfd = 0;
@@ -84,7 +97,6 @@ static char hex[] = "0123456789abcdef";
 /* print log string and exit if priority is LOG_ERR */
 void printlog(int priority, const char *format, ...) {
   va_list arg;
-
   va_start(arg, format);
 
   if (logok)
@@ -101,10 +113,16 @@ void printlog(int priority, const char *format, ...) {
 }
 
 static void cleanup() {
-  if (iothstack && ioth_delstack(iothstack) < 0) // todo controllare
-    printlog(LOG_WARNING, "Couldn't free iothstack: %s", strerror(errno));
+  for (int i = 0; i < npfd; i++)
+    ioth_close(pfd[npfd].fd);
+  if (iothstack)
+    ioth_delstack(iothstack);
   if ((pidfile != NULL) && unlink(pidfile_path) < 0)
     printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
+  if (is_ssl_enable) {
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+  }
 }
 
 int is_password_correct(const char *pw) {
@@ -133,7 +151,7 @@ static void sig_handler(int sig) {
 }
 
 /* sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
- * ignores all the others signals which could cause termination.     */
+ * ignores all the others signals which could cause termination. */
 static void set_sighandlers() {
   struct {
     int sig;
@@ -166,9 +184,10 @@ static void set_sighandlers() {
 
 static void print_usage() {
   fprintf(stderr,
-          "Usage: %s [-w] [-t] [-d] [-n nodename] [-f rcfile] [-p pidfile] mgmt_socket\n"
-          "       %s [--web] [--telnet] [--daemon] [--nodename nodename] [--rcfile rcfile] "
-          "[--pidfile pidfile] mgmt_socket\n",
+          "Usage:\t%s\t[-w] [-t] [-d] [-n nodename] [-f rcfile] [-p pidfile] "
+          "[-k privatekeyfile] [-c certificatefile] mgmt_socket\n"
+          "\t%s\t[--web] [--telnet] [--daemon] [--nodename nodename] [--rcfile rcfile]\n"
+          "\t\t\t[--pidfile pidfile] [--key privatekeyfile] [--cert certificatefile] mgmt_socket\n",
           progname, progname);
   exit(-1);
 }
@@ -192,7 +211,7 @@ int open_extra_vde_mgmt() {
   snprintf(sun.sun_path, UNIX_PATH_MAX, "%s", mgmt);
   fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0) {
-    printlog(LOG_WARNING, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
+    printlog(LOG_WARNING, "Error connecting to the mgmt socket '%s': %s", mgmt, strerror(errno));
     return -1;
   }
   if (read(fd, buf, BUFSIZE) <= 0) {
@@ -202,17 +221,16 @@ int open_extra_vde_mgmt() {
   return fd;
 }
 
-int open_vde_mgmt(char *mgmt, char *nodename) {
+int open_vde_mgmt(char *mgmt) {
   struct sockaddr_un sun;
   int fd, n;
   char buf[BUFSIZE + 1], *line2, *ctrl;
   sun.sun_family = PF_UNIX;
-
   snprintf(sun.sun_path, UNIX_PATH_MAX, "%s", mgmt);
 
   fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0)
-    printlog(LOG_ERR, "Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
+    printlog(LOG_ERR, "Error connecting to the mgmt socket '%s': %s", mgmt, strerror(errno));
 
   if ((n = read(fd, buf, BUFSIZE)) <= 0)
     printlog(LOG_ERR, "Error reading banner from VDE switch: %s", strerror(errno));
@@ -253,56 +271,56 @@ int open_vde_mgmt(char *mgmt, char *nodename) {
 
 static void read_ip(char *full_ip, int af) {
   char *bit = rindex(full_ip, '/');
-
   if (bit == 0)
     printlog(LOG_ERR, "IP addresses must include the netmask i.e. addr/maskbits");
 
   int err, netmask = atoi(bit + 1);
   *bit = '\0';
+  ip = strdup(full_ip);
 
   switch (af) {
-    case PF_INET: {
-      uint8_t ipv4[4];
-      if ((err = inet_pton(af, full_ip, &ipv4) <= 0))
-        printlog(LOG_ERR, "Convertion ipv4 error: %s", strerror(errno));
+  case PF_INET: {
+    uint8_t ipv4[4];
+    if ((err = inet_pton(af, full_ip, &ipv4) <= 0))
+      printlog(LOG_ERR, "Convertion ipv4 error: %s", strerror(errno));
 
-      if (ioth_ipaddr_add(iothstack, af, ipv4, netmask, ifnet) < 0)
-        printlog(LOG_ERR, "Couldn't add ip");
-    } break;
-    case PF_INET6: {
-      uint16_t ipv6[8];
-      if ((err = inet_pton(af, full_ip, &ipv6) <= 0))
-        printlog(LOG_ERR, "Convertion ipv6 error: %s", strerror(errno));
+    if (ioth_ipaddr_add(iothstack, af, ipv4, netmask, ifnet) < 0)
+      printlog(LOG_ERR, "Couldn't add ip: %s", strerror(errno));
+  } break;
+  case PF_INET6: {
+    uint16_t ipv6[8];
+    if ((err = inet_pton(af, full_ip, &ipv6) <= 0))
+      printlog(LOG_ERR, "Convertion ipv6 error: %s", strerror(errno));
 
-      if (ioth_ipaddr_add(iothstack, af, ipv6, netmask, ifnet) < 0)
-        printlog(LOG_ERR, "Couldn't add ip");
-    } break;
-    default:
-      printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
+    if (ioth_ipaddr_add(iothstack, af, ipv6, netmask, ifnet) < 0)
+      printlog(LOG_ERR, "Couldn't add ip: %s", strerror(errno));
+  } break;
+  default:
+    printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
   }
 }
 
 static void read_route_ip(char *full_ip, int af) {
   int err;
   switch (af) {
-    case PF_INET: {
-      uint8_t ipv4[4];
-      if ((err = inet_pton(af, full_ip, &ipv4) <= 0))
-        printlog(LOG_ERR, "Convertion route ipv4 error: %s", strerror(errno));
+  case PF_INET: {
+    uint8_t ipv4[4];
+    if ((err = inet_pton(af, full_ip, &ipv4) <= 0))
+      printlog(LOG_ERR, "Convertion route ipv4 error: %s", strerror(errno));
 
-      if (ioth_iproute_add(iothstack, af, NULL, 0, ipv4, ifnet) < 0)
-        printlog(LOG_ERR, "Couldn't add route ipv4: %s", strerror(errno));
-    } break;
-    case PF_INET6: {
-      uint16_t ipv6[8];
-      if ((err = inet_pton(af, full_ip, &ipv6) <= 0))
-        printlog(LOG_ERR, "Convertion route ipv6 error: %s", strerror(errno));
+    if (ioth_iproute_add(iothstack, af, NULL, 0, ipv4, ifnet) < 0)
+      printlog(LOG_ERR, "Couldn't add route ipv4: %s", strerror(errno));
+  } break;
+  case PF_INET6: {
+    uint16_t ipv6[8];
+    if ((err = inet_pton(af, full_ip, &ipv6) <= 0))
+      printlog(LOG_ERR, "Convertion route ipv6 error: %s", strerror(errno));
 
-      if (ioth_iproute_add(iothstack, af, NULL, 0, ipv6, ifnet) < 0)
-        printlog(LOG_ERR, "Couldn't add ipv6: %s", strerror(errno));
-    } break;
-    default:
-      printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
+    if (ioth_iproute_add(iothstack, af, NULL, 0, ipv6, ifnet) < 0)
+      printlog(LOG_ERR, "Couldn't add ipv6: %s", strerror(errno));
+  } break;
+  default:
+    printlog(LOG_ERR, "Unsupported Address Family: %s", full_ip);
   }
 }
 
@@ -405,7 +423,7 @@ int setfds(fd_set *rds, fd_set *exc) {
 }
 #endif
 
-static void save_pidfile(void) {
+static void save_pidfile() {
   if (pidfile[0] != '/')
     strncat(pidfile_path, pidfile, _POSIX_PATH_MAX - strlen(pidfile_path));
   else
@@ -425,12 +443,11 @@ static void save_pidfile(void) {
   fclose(f);
 }
 
-/* this custom version of daemon(3) continue to receive stderr messages
- * until the end of the startup phase, the foreground process terminates
- * when stderr gets closed */
-static int special_daemon(void) {
-  int fd, n;
-  int errorpipe[2];
+/* this custom version of daemon(3) continue to receive stderr messages until
+ * the end of the startup phase, the foreground process terminates when stderr
+ * gets closed */
+static int special_daemon() {
+  int fd, n, errorpipe[2];
   char buf[256];
   ssize_t voidn;
   (void)voidn;
@@ -447,7 +464,6 @@ static int special_daemon(void) {
       close(errorpipe[1]);
       while ((n = read(errorpipe[0], buf, 128)) > 0)
         voidn = write(STDERR_FILENO, buf, n);
-
       _exit(0);
   }
   close(errorpipe[0]);
@@ -469,13 +485,21 @@ static int special_daemon(void) {
 }
 
 /* Set option and exit if mngmt and telnet or web is not defined */
-void manage_args(int argc, char *argv[], char **conffile, char **nodename) {
+void manage_args(int argc, char *argv[]) {
+  progname = argv[0];
   while (1) {
     int option_index = 0;
-    static struct option long_options[] = {
-        {"daemon", 0, 0, 'd'},   {"mgmt", 1, 0, 'M'},    {"telnet", 0, 0, 't'},
-        {"web", 0, 0, 'w'},      {"help", 0, 0, 'h'},    {"rcfile", 1, 0, 'f'},
-        {"nodename", 1, 0, 'n'}, {"pidfile", 1, 0, 'p'}, {0, 0, 0, 0}};
+    static struct option long_options[] = {{"daemon", 0, 0, 'd'},
+                                           {"mgmt", 1, 0, 'M'},
+                                           {"telnet", 0, 0, 't'},
+                                           {"web", 0, 0, 'w'},
+                                           {"help", 0, 0, 'h'},
+                                           {"rcfile", 1, 0, 'f'},
+                                           {"cert", 1, 0, 'c'},
+                                           {"key", 1, 0, 'k'},
+                                           {"nodename", 1, 0, 'n'},
+                                           {"pidfile", 1, 0, 'p'},
+                                           {0, 0, 0, 0}};
     int c = getopt_long_only(argc, argv, "hdwtM:f:n:", long_options, &option_index);
     if (c == -1)
       break;
@@ -485,10 +509,10 @@ void manage_args(int argc, char *argv[], char **conffile, char **nodename) {
         mgmt = strdup(optarg);
         break;
       case 'f':
-        *conffile = strdup(optarg);
+        conffile = strdup(optarg);
         break;
       case 'n':
-        *nodename = strdup(optarg);
+        nodename = strdup(optarg);
         break;
       case 't':
         telnet = 1;
@@ -502,33 +526,53 @@ void manage_args(int argc, char *argv[], char **conffile, char **nodename) {
       case 'p':
         pidfile = strdup(optarg);
         break;
+      case 'c':
+        cert = strdup(optarg);
+        break;
+      case 'k':
+        key = strdup(optarg);
+        break;
       case 'h':
         print_usage(); // implies exit
         break;
     }
   }
-
+  /* Check args */
   if (optind < argc && mgmt == NULL)
     mgmt = argv[optind];
+  if (cert != NULL || key != NULL) {
+    if (cert == NULL)
+      printlog(LOG_ERR, "certificate option must be defined if a private key is specified");
+    if (key == NULL)
+      printlog(LOG_ERR, "private key option must be defined if a certificate is specified");
+  }
   if (mgmt == NULL)
     printlog(LOG_ERR, "mgmt_socket not defined");
   if (telnet == 0 && web == 0)
     printlog(LOG_ERR, "at least one service option (-t -w) must be specified");
+
+  atexit(cleanup);
+  set_sighandlers();
 }
 
 void setup_daemonize() {
-  /* saves current path in pidfile_path, because otherwise with daemonize() we forget it */
+  /* saves current path in pidfile_path, because otherwise with daemonize() we
+   * forget it */
   if (getcwd(pidfile_path, _POSIX_PATH_MAX - 1) == NULL)
     printlog(LOG_ERR, "getcwd: %s", strerror(errno));
   strcat(pidfile_path, "/");
 
-  /* call daemon before starting the stack otherwise the stack threads
-   * does not get inherited by the forked process */
+  /* call daemon before starting the stack otherwise the stack
+   * threads does not get inherited by the forked process */
   if (special_daemon())
     printlog(LOG_ERR, "daemon: %s", strerror(errno));
 }
 
 void handle(int vdefd) {
+  if (telnet)
+    printf("You can now connect with: telnet %s\n", ip);
+  if (web)
+    printf("You can now search in your browser http%c://%s\n", is_ssl_enable ? 's' : '\0', ip);
   while (1) {
     int m = poll(pfd, npfd, -1);
     for (int i = 0; i < npfd && m > 0; i++) {
@@ -540,7 +584,7 @@ void handle(int vdefd) {
   }
 }
 
-void check_and_read_conffile(char *conffile) {
+void check_and_read_conffile() {
   /* If rcfile is specified, try it and nothing else */
   if (conffile && read_conffile(conffile) < 0)
     printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
@@ -557,7 +601,6 @@ void check_and_read_conffile(char *conffile) {
     }
     if (!homedir || rv < 0)
       rv = read_conffile(conffile = ROOTCONFFILE);
-
     if (rv < 0)
       printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
   }
@@ -576,33 +619,24 @@ void start_daemon() {
 }
 
 int main(int argc, char *argv[]) {
-  int vdefd;
-  char *conffile = NULL;
-  char *nodename = NULL;
-  progname = argv[0];
-
-  manage_args(argc, argv, &conffile, &nodename);
-
-  atexit(cleanup);
-  set_sighandlers();
+  manage_args(argc, argv);
 
   if (daemonize)
     setup_daemonize();
 
-  vdefd = open_vde_mgmt(mgmt, nodename);
+  vdefd = open_vde_mgmt(mgmt);
 
-  check_and_read_conffile(conffile);
+  check_and_read_conffile();
 
-  /* once here, we're sure we're the true process which will continue as a
-   * server: save PID file if needed */
+  /* once here, we're sure we're the true process which
+   * will continue as a server: save PID file if needed */
   if (pidfile)
     save_pidfile();
 
   if (telnet)
     telnet_init(iothstack);
   if (web)
-    web_init(iothstack, vdefd);
-
+    web_init(iothstack, vdefd, cert, key);
   if (daemonize)
     start_daemon();
 

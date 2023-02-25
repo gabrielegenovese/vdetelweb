@@ -4,6 +4,7 @@
  *   telnet.c: telnet module
  *
  *   Copyright 2005,2007 Renzo Davoli University of Bologna - Italy
+ *   migration from lwip to libioth by Gabriele Genovese 2023
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -45,7 +46,7 @@
 #include <unistd.h>
 
 #define TELNET_TCP_PORT 23
-#define TEMPTELNET_TCP_PORT 2323 // todo remove
+#define DEVTELNET_TCP_PORT 2323 // use this in development
 
 void telnetdata(int fn, int fd, int vdefd) {
   (void)fd;
@@ -146,7 +147,7 @@ void telnet_init(struct ioth *iothstack) {
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(TEMPTELNET_TCP_PORT); // se setto la 23 mi da problemi di permessi, todo: capire
+  serv_addr.sin_port = htons(DEVTELNET_TCP_PORT); // todo: change in prod
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "telnet bind err: %s", strerror(errno));

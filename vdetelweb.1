@@ -46,6 +46,14 @@ vdetelweb \- Virtual Distributed Ethernet Telnet and/or Web management module
 .BI \-\-pidfile
 .I pidfile
 ]
+[
+.BI \-\-cert
+.I certfile
+]
+[
+.BI \-\-key
+.I keyfile
+]
 .I mgmt_socket
 .br
 .SH DESCRIPTION
@@ -79,6 +87,12 @@ the programm will create it and remove it on close.
 .TP
 .B \-h, \-\-help
 print help. please use it for a more complete list of options.
+.TP
+.B \-c, \-\-cert
+pam file of the certificate for https connection. needs \-\-key setted.
+.TP
+.B \-k, \-\-key
+pam file of the private key for https connection. needs \-\-cert setted.
 .TP
 .B \fImgmt_socket\fP
 is the managemnt socket used to communicate with the vde_switch.

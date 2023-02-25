@@ -1,12 +1,13 @@
 #ifndef _VDETELWEB_H
 #define _VDETELWEB_H
-#define BUFSIZE 1024
-typedef void (*voidfun)();
-
+#define BUFSIZE 2048
+#define true 1
+#define false 0
 #include <ioth.h>
 
-extern void *status[];
+typedef void (*voidfun)();
 
+extern void *status[];
 extern char *banner;
 extern char *prompt;
 
@@ -16,7 +17,7 @@ void delpfd(int fn);
 int pfdsearch(int fd);
 int open_extra_vde_mgmt();
 void telnet_init(struct ioth *iothstack);
-void web_init(struct ioth *iothstack, int vdefd);
+void web_init(struct ioth *iothstack, int vdefd, char *cert, char *key);
 
 void printlog(int priority, const char *format, ...);
 
