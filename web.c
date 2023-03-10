@@ -125,7 +125,7 @@ static void web_close(int fn, int fd) {
   ioth_close(fd);
 }
 
-static int vde_getanswer(voidfun f, void *arg, int vdefd) {
+static int ssh_getanswer(voidfun f, void *arg, int vdefd) {
   char buf[BUFSIZE];
   char linebuf[BUFSIZE + 1];
   int n = 0, ib = 0, il = 0, indata = 0, eoa = 0;
@@ -144,7 +144,7 @@ static int vde_getanswer(voidfun f, void *arg, int vdefd) {
           if (linebuf[0] == '.' && linebuf[1] == '\r')
             indata = 0;
           else
-            f(arg, linebuf, il, indata, 0);
+            f(arg, linebuf, il, indata);
         } else if (strncmp(linebuf, "0000", 4) == 0)
           indata = 1;
         else {
@@ -279,7 +279,7 @@ static struct vdemenu *vde_gethelp(int vdefd) {
   (void)voidn;
   struct vdemenu *head = NULL;
   voidn = write(vdefd, "help\n", 5);
-  vde_getanswer(vde_helpline, &head, vdefd);
+  ssh_getanswer(vde_helpline, &head, vdefd);
   return head;
 }
 
@@ -293,7 +293,7 @@ static void ioth_showline(int *fdp, char *buf, int len, int indata) {
 }
 
 static int ioth_showout(int fd, int vdefd) {
-  return vde_getanswer(ioth_showline, &fd, vdefd);
+  return ssh_getanswer(ioth_showline, &fd, vdefd);
 }
 
 static int hex2num(int c) {

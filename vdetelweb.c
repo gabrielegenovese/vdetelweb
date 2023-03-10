@@ -57,6 +57,7 @@
 #include <unistd.h>
 
 int daemonize;
+int ssh;
 int telnet;
 int web;
 int vdefd;
@@ -70,6 +71,7 @@ char *banner;
 char *progname;
 char *prompt;
 int ifnet, logok;
+static char *user;
 static char *passwd;
 static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
@@ -109,10 +111,12 @@ void printlog(int priority, const char *format, ...) {
   va_end(arg);
 
   if (priority == LOG_ERR)
-    exit(-1);
+    exit(1);
 }
 
 static void cleanup() {
+  if(ssh)
+    my_ssh_clean();
   for (int i = 0; i < npfd; i++)
     ioth_close(pfd[npfd].fd);
   if (iothstack)
@@ -123,6 +127,10 @@ static void cleanup() {
     SSL_free(ssl);
     SSL_CTX_free(ctx);
   }
+}
+
+int is_user_correct(const char *usr) {
+  return (strcmp(user, usr) == 0);
 }
 
 int is_password_correct(const char *pw) {
@@ -324,6 +332,11 @@ static void read_route_ip(char *full_ip, int af) {
   }
 }
 
+static void read_user(char *arg, int unused) {
+  (void)unused;
+  user = strdup(arg);
+}
+
 static void read_pass(char *arg, int unused) {
   (void)unused;
   passwd = strdup(arg);
@@ -344,6 +357,7 @@ int read_conffile(char *path) {
              {"defroute4", read_route_ip, PF_INET},
              {"defroute6", read_route_ip, PF_INET6},
              {"defroute", read_route_ip, PF_INET}, // ipv4 default
+             {"user", read_user, 0},
              {"password", read_pass, 0},
              {NULL, NULL, 0}};
 
@@ -492,6 +506,7 @@ void manage_args(int argc, char *argv[]) {
     static struct option long_options[] = {{"daemon", 0, 0, 'd'},
                                            {"mgmt", 1, 0, 'M'},
                                            {"telnet", 0, 0, 't'},
+                                           {"ssh", 0, 0, 's'},
                                            {"web", 0, 0, 'w'},
                                            {"help", 0, 0, 'h'},
                                            {"rcfile", 1, 0, 'f'},
@@ -500,7 +515,7 @@ void manage_args(int argc, char *argv[]) {
                                            {"nodename", 1, 0, 'n'},
                                            {"pidfile", 1, 0, 'p'},
                                            {0, 0, 0, 0}};
-    int c = getopt_long_only(argc, argv, "hdwtM:f:n:", long_options, &option_index);
+    int c = getopt_long_only(argc, argv, "hdwtsM:f:n:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -516,6 +531,9 @@ void manage_args(int argc, char *argv[]) {
         break;
       case 't':
         telnet = 1;
+        break;
+      case 's':
+        ssh = 1;
         break;
       case 'w':
         web = 1;
@@ -637,6 +655,8 @@ int main(int argc, char *argv[]) {
     telnet_init(iothstack);
   if (web)
     web_init(iothstack, vdefd, cert, key);
+  if (ssh)
+    my_ssh_init(iothstack);
   if (daemonize)
     start_daemon();
 

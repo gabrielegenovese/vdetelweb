@@ -79,8 +79,8 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st) {
   case HIST_NOCMD:
     while (cmd[len - 1] == '\n')
       cmd[--len] = 0;
-    if (strcmp(cmd, "admin") != 0)
-      ioth_write(termfd, "login incorrect\r\n\r\nLogin: ", 26);
+    if (!is_user_correct(cmd))
+      ioth_write(termfd, "Invalid user\r\n\r\nLogin: ", 24);
     else {
       ioth_write(termfd, "Password: ", 11);
       vdehist_setstatus(st, HIST_PASSWDFLAG);
@@ -95,7 +95,7 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st) {
       histstatus++;
       vdehist_setstatus(st, histstatus);
       if (histstatus < (HIST_PASSWDFLAG + 3))
-        ioth_write(termfd, "\r\nlogin incorrect\r\n\r\nPassword: ", 30);
+        ioth_write(termfd, "\r\nlogin incorrect\r\n\r\nPassword: ", 32);
       else
         return "logout";
     } else {
