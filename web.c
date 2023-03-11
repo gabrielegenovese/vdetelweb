@@ -561,7 +561,7 @@ int web_core(int fn, int fd, int vdefd) {
     /* SHA1 */
     decode64((st->linebuf + k), passwd_buf, strlen(st->linebuf + k));
     passwd_buf_shift = (char *)(strchr(passwd_buf, ':') + 1);
-    if (is_password_correct(passwd_buf_shift))
+    if (is_passwd_correct(passwd_buf_shift))
       st->status = WEB_AUTHORIZED;
     return 0;
   } else if (st->linebuf[0] == '\n' || st->linebuf[0] == '\r') {
@@ -692,7 +692,7 @@ void web_init(struct ioth *iothsocket, int vdefd, char *cert, char *key) {
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   serv_addr.sin_port = is_ssl_enable
                            ? htons(DEVWEB_TCP_PORT)
-                           : htons(DEVWEB_TCP_PORT); // todo: change in prod
+                           : htons(DEVWEB_TCP_PORT); // todo: change the port in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "web bind err: %s", strerror(errno));

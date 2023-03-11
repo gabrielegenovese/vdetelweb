@@ -63,7 +63,8 @@ int web;
 int vdefd;
 char *conffile = NULL;
 char *nodename = NULL;
-char *cert = NULL;
+char *https_cert = NULL;
+char *ssh_cert = NULL;
 char *key = NULL;
 char *ip = NULL;
 char *mgmt;
@@ -116,7 +117,7 @@ void printlog(int priority, const char *format, ...) {
 
 static void cleanup() {
   if(ssh)
-    my_ssh_clean();
+    ssh_clean();
   for (int i = 0; i < npfd; i++)
     ioth_close(pfd[npfd].fd);
   if (iothstack)
@@ -129,11 +130,11 @@ static void cleanup() {
   }
 }
 
-int is_user_correct(const char *usr) {
+int is_usr_correct(const char *usr) {
   return (strcmp(user, usr) == 0);
 }
 
-int is_password_correct(const char *pw) {
+int is_passwd_correct(const char *pw) {
   unsigned char out[mhash_get_block_size(MHASH_SHA1)];
   char outstr[mhash_get_block_size(MHASH_SHA1) * 2 + 1];
   unsigned int i;
@@ -342,6 +343,11 @@ static void read_pass(char *arg, int unused) {
   passwd = strdup(arg);
 }
 
+static void read_ssh_cert(char * arg, int unused) {
+  (void)unused;
+  ssh_cert = strdup(arg);
+}
+
 int read_conffile(char *path) {
   FILE *f;
   char buf[BUFSIZE], *s;
@@ -359,6 +365,7 @@ int read_conffile(char *path) {
              {"defroute", read_route_ip, PF_INET}, // ipv4 default
              {"user", read_user, 0},
              {"password", read_pass, 0},
+             {"sshcert", read_ssh_cert, 0},
              {NULL, NULL, 0}};
 
   if (path == NULL)
@@ -545,7 +552,7 @@ void manage_args(int argc, char *argv[]) {
         pidfile = strdup(optarg);
         break;
       case 'c':
-        cert = strdup(optarg);
+        https_cert = strdup(optarg);
         break;
       case 'k':
         key = strdup(optarg);
@@ -558,8 +565,8 @@ void manage_args(int argc, char *argv[]) {
   /* Check args */
   if (optind < argc && mgmt == NULL)
     mgmt = argv[optind];
-  if (cert != NULL || key != NULL) {
-    if (cert == NULL)
+  if (https_cert != NULL || key != NULL) {
+    if (https_cert == NULL)
       printlog(LOG_ERR, "certificate option must be defined if a private key is specified");
     if (key == NULL)
       printlog(LOG_ERR, "private key option must be defined if a certificate is specified");
@@ -589,6 +596,8 @@ void setup_daemonize() {
 void handle(int vdefd) {
   if (telnet)
     printf("You can now connect with: telnet %s\n", ip);
+  if (ssh)
+    printf("You can now connect with: ssh %s@%s\n", user, ip);
   if (web)
     printf("You can now search in your browser http%c://%s\n", is_ssl_enable ? 's' : '\0', ip);
   while (1) {
@@ -654,9 +663,9 @@ int main(int argc, char *argv[]) {
   if (telnet)
     telnet_init(iothstack);
   if (web)
-    web_init(iothstack, vdefd, cert, key);
+    web_init(iothstack, vdefd, https_cert, key);
   if (ssh)
-    my_ssh_init(iothstack);
+    ssh_init(iothstack, ssh_cert);
   if (daemonize)
     start_daemon();
 

@@ -32,6 +32,9 @@ vdetelweb \- Virtual Distributed Ethernet Telnet and/or Web management module
 .BI \-\-telnet 
 ]  
 [ 
+.BI \-\-ssh 
+] 
+[ 
 .BI \-\-nodename
 .I nodename
 ] 
@@ -68,6 +71,9 @@ start the web server. At least one of \fB\-\-web\fP or \fB\-\-telnet\fP \fImust\
 .TP
 .B \-t, \-\-telnet
 start the telnet server. At least one of \fB\-\-web\fP or \fB\-\-telnet\fP \fImust\fP be set.
+.TP
+.B \-t, \-\-ssh
+start the ssh server. If this parameter is set, sshcert must be set in the config file.
 .TP
 .B \-n, \-\-nodename \fInodename\fP
 specify the nodename as seen from remote connections (e.g. in the command prompt or

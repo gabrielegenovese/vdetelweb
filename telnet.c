@@ -79,7 +79,7 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st) {
   case HIST_NOCMD:
     while (cmd[len - 1] == '\n')
       cmd[--len] = 0;
-    if (!is_user_correct(cmd))
+    if (!is_usr_correct(cmd))
       ioth_write(termfd, "Invalid user\r\n\r\nLogin: ", 24);
     else {
       ioth_write(termfd, "Password: ", 11);
@@ -91,7 +91,7 @@ char *telnet_logincmd(char *cmd, int len, struct vdehiststat *st) {
   case HIST_PASSWDFLAG + 2:
     while (cmd[len - 1] == '\n')
       cmd[--len] = 0;
-    if (!is_password_correct(cmd)) {
+    if (!is_passwd_correct(cmd)) {
       histstatus++;
       vdehist_setstatus(st, histstatus);
       if (histstatus < (HIST_PASSWDFLAG + 3))
@@ -147,7 +147,7 @@ void telnet_init(struct ioth *iothstack) {
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(DEVTELNET_TCP_PORT); // todo: change in prod
+  serv_addr.sin_port = htons(DEVTELNET_TCP_PORT); // todo: change the port in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "telnet bind err: %s", strerror(errno));
