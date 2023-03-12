@@ -573,8 +573,8 @@ void manage_args(int argc, char *argv[]) {
   }
   if (mgmt == NULL)
     printlog(LOG_ERR, "mgmt_socket not defined");
-  if (telnet == 0 && web == 0)
-    printlog(LOG_ERR, "at least one service option (-t -w) must be specified");
+  if (telnet == 0 && web == 0 && ssh == 0)
+    printlog(LOG_ERR, "at least one service option (-t -w -s) must be specified");
 
   atexit(cleanup);
   set_sighandlers();

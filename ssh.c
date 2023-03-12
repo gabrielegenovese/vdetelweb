@@ -22,7 +22,6 @@
  *   $Id$
  *
  */
-
 #define WOLFSSH_TEST_SERVER
 #define WOLFSSH_TEST_THREADING
 
@@ -33,14 +32,13 @@
 #include <wolfssh/test.h>
 
 #define DEVPORT 2222
-#define SSH_PORT 22
+#define SSH_PORT 22  // use this in
 
 #define HIGHWATER_MARK_SZ 0x3FFF8000 /* 1GB - 32kB */
 #define SSH_BUFFER_SZ 4096
 #define LOADKEY_BUFFER_SZ 1200
 
 static const char serverBanner[] = "VDETELWEB SSH Server\n";
-int switch_mgmtfd;
 int threadCount = 0;
 WOLFSSH_CTX *ws_ctx = NULL;
 
@@ -118,16 +116,15 @@ void close_sshclient(thread_ctx_t *ctx) {
   free(ctx);
 }
 
-static THREAD_RETURN WOLFSSH_THREAD server_worker(void *vArgs) {
+static THREAD_RETURN server_worker(void *vArgs) {
   thread_ctx_t *threadCtx = (thread_ctx_t *)vArgs;
 
   if (wolfSSH_accept(threadCtx->ssh) == WS_SUCCESS) {
-
     byte *buf = NULL;
-    byte *tmpBuf;
+    byte *tmp_buf;
     char cmd[100];
-    int bufSz, backlogSz = 0, rxSz, txSz, stop = 0, txSum;
-    int letter_count = 0;
+    int buf_sz, backlogSz = 0, rxSz, txSz, stop = 0, txSum;
+    int switch_mgmtfd, letter_count = 0;
 
     if ((switch_mgmtfd = open_extra_vde_mgmt()) < 0)
       stop = 1;
@@ -135,12 +132,12 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void *vArgs) {
       print_prompt(threadCtx);
 
     do {
-      bufSz = SSH_BUFFER_SZ + backlogSz;
-      tmpBuf = (byte *)realloc(buf, bufSz);
-      if (tmpBuf == NULL)
+      buf_sz = SSH_BUFFER_SZ + backlogSz;
+      tmp_buf = (byte *)realloc(buf, buf_sz);
+      if (tmp_buf == NULL)
         stop = 1;
       else
-        buf = tmpBuf;
+        buf = tmp_buf;
 
       if (!stop) {
         do {
@@ -164,7 +161,7 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void *vArgs) {
             case 0x03: // ctrl+C : close
               stop = 1;
               break;
-            case 0x0D: // enter : send command
+            case 0x0D: // enter : send command to switch
               if (letter_count > 0) {
                 cmd[letter_count] = '\0';
 
@@ -176,7 +173,10 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void *vArgs) {
                   wolfSSH_stream_send(threadCtx->ssh, buf + txSum, backlogSz - txSum);
                 }
                 voidn = write(switch_mgmtfd, cmd, strlen(cmd));         // send command
-                ssh_getanswer(ssh_showline, threadCtx, switch_mgmtfd);  // get output
+                if(strstr(cmd, "logout") != NULL)
+                  stop = 1;
+                else
+                  ssh_getanswer(ssh_showline, threadCtx, switch_mgmtfd);  // get output
               } else {
                 // get back cursor
                 for (int i = 0; i < (int)strlen(prompt); i++) {
@@ -195,14 +195,13 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void *vArgs) {
                 *(buf + txSum) = 0x20;
                 wolfSSH_stream_send(threadCtx->ssh, buf + txSum, backlogSz - txSum);
                 *(buf + txSum) = 0x08;
-                letter_count--;
+                --letter_count;
               } else {
                 do_write = false;
-                txSum++;
+                ++txSum;
               }
               break;
-            case 0x1B: // escape char - arrow pressed
-              // skip
+            case 0x1B: // escape char - arrow pressed (skip chars and do nothing)
               do_write = false;
               txSz = 3;
               txSum += txSz;
@@ -228,7 +227,7 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void *vArgs) {
 
     free(buf);
   } else
-    printlog(LOG_WARNING, "Couldn't connect to client: %s", strerror(errno));
+    printlog(LOG_WARNING, "Couldn't connect to client");
 
   close_sshclient(threadCtx);
   return 0;
@@ -358,7 +357,7 @@ void ssh_init(struct ioth *iothstack, const char *path) {
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(DEVPORT); // todo: change the port in prod/dev
+  serv_addr.sin_port = htons(SSH_PORT); // todo: change the port in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "ssh bind err: %s", strerror(errno));

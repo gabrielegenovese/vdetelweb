@@ -1,6 +1,6 @@
 #ifndef _VDETELWEB_H
 #define _VDETELWEB_H
-#define BUFSIZE 2048
+#define BUFSIZE 4096
 #define true 1
 #define false 0
 #include <ioth.h>
@@ -21,7 +21,6 @@ void ssh_clean();
 void ssh_init(struct ioth *iothstack, const char *path);
 void telnet_init(struct ioth *iothstack);
 void web_init(struct ioth *iothstack, int vdefd, char *cert, char *key);
-
 void printlog(int priority, const char *format, ...);
 
 #endif

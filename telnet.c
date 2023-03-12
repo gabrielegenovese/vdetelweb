@@ -22,7 +22,6 @@
  *   $Id$
  *
  */
-
 #include "vdetelweb.h"
 #include <arpa/inet.h>
 #include <arpa/telnet.h>
@@ -45,8 +44,8 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#define TELNET_TCP_PORT 23
-#define DEVTELNET_TCP_PORT 2323 // use this in development
+#define TELNET_PORT 23
+#define DEVTELNET_PORT 2323 // use this in development
 
 void telnetdata(int fn, int fd, int vdefd) {
   (void)fd;
@@ -147,12 +146,11 @@ void telnet_init(struct ioth *iothstack) {
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(DEVTELNET_TCP_PORT); // todo: change the port in prod/dev
+  serv_addr.sin_port = htons(TELNET_PORT); // todo: change the port in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "telnet bind err: %s", strerror(errno));
 
   ioth_listen(sockfd, 5);
-
   addpfd(sockfd, telnetaccept);
 }

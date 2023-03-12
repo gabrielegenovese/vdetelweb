@@ -49,9 +49,9 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#define HTTP_TCP_PORT 80
-#define HTTPS_TCP_PORT 443
-#define DEVWEB_TCP_PORT 8080 // use this in development
+#define HTTP_PORT 80
+#define HTTPS_PORT 443
+#define DEVWEB_PORT 8080 // use this in development
 
 #define WEB_IDENTIFY 0x0
 #define WEB_AUTHORIZED 0x1
@@ -691,8 +691,8 @@ void web_init(struct ioth *iothsocket, int vdefd, char *cert, char *key) {
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   serv_addr.sin_port = is_ssl_enable
-                           ? htons(DEVWEB_TCP_PORT)
-                           : htons(DEVWEB_TCP_PORT); // todo: change the port in prod/dev
+                           ? htons(HTTPS_PORT)
+                           : htons(HTTP_PORT); // todo: change the ports in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "web bind err: %s", strerror(errno));

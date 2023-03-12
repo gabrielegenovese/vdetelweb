@@ -40,9 +40,9 @@ The switch must have been started with the remote mgmt option (-m).
 ```
 Launch the tool:
 ```
-% vdetelweb -t -w -f vdetelwebrc /tmp/vde.mgmt
+% vdetelweb -t -w -s -f vdetelwebrc /tmp/vde.mgmt
 ```
-Now it is possible to use telnet or a browser to manage the switch.
+Now it is possible to use telnet, ssh or a browser to manage the switch.
 
 (c) 2005 Renzo Davoli - Department of Computer Science. University of Bologna.
 

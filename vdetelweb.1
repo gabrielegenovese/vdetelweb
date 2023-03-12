@@ -67,13 +67,14 @@ of a VDE2 switch.
 .SH OPTIONS
 .TP
 .B \-w, \-\-web
-start the web server. At least one of \fB\-\-web\fP or \fB\-\-telnet\fP \fImust\fP be set.
+start the web server. At least one of \fB\-\-web\fP, \fB\-\-telnet\fP or \fB\-\-ssh\fP \fImust\fP be set.
 .TP
 .B \-t, \-\-telnet
-start the telnet server. At least one of \fB\-\-web\fP or \fB\-\-telnet\fP \fImust\fP be set.
+start the telnet server. At least one of \fB\-\-web\fP, \fB\-\-telnet\fP or \fB\-\-ssh\fP \fImust\fP be set.
 .TP
 .B \-t, \-\-ssh
-start the ssh server. If this parameter is set, sshcert must be set in the config file.
+start the ssh server. If this parameter is set, sshcert must be set in the config file (must be a der file).
+At least one of \fB\-\-web\fP, \fB\-\-telnet\fP or \fB\-\-ssh\fP \fImust\fP be set.
 .TP
 .B \-n, \-\-nodename \fInodename\fP
 specify the nodename as seen from remote connections (e.g. in the command prompt or
