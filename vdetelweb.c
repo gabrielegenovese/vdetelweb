@@ -30,31 +30,17 @@
  */
 #include "vdetelweb.h"
 #include <arpa/inet.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <getopt.h>
 #include <ioth.h>
-#include <libgen.h>
-#include <limits.h>
 #include <linux/un.h>
 #include <mhash.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/poll.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <syslog.h>
-#include <unistd.h>
 
 int daemonize;
 int ssh;
@@ -214,11 +200,10 @@ void set_prompt(char *ctrl, char *nodename) {
 
 int open_extra_vde_mgmt() {
   struct sockaddr_un sun;
-  int fd;
   char buf[BUFSIZE + 1];
   sun.sun_family = PF_UNIX;
   snprintf(sun.sun_path, UNIX_PATH_MAX, "%s", mgmt);
-  fd = socket(PF_UNIX, SOCK_STREAM, 0);
+  int fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (connect(fd, (struct sockaddr *)(&sun), sizeof(sun)) < 0) {
     printlog(LOG_WARNING, "Error connecting to the mgmt socket '%s': %s", mgmt, strerror(errno));
     return -1;
@@ -336,11 +321,15 @@ static void read_route_ip(char *full_ip, int af) {
 static void read_user(char *arg, int unused) {
   (void)unused;
   user = strdup(arg);
+  if(user == NULL)
+    printlog(LOG_ERR, "User must be set in the config file");
 }
 
 static void read_pass(char *arg, int unused) {
   (void)unused;
   passwd = strdup(arg);
+  if(passwd == NULL)
+    printlog(LOG_ERR, "Password must be set in the config file");
 }
 
 static void read_ssh_cert(char * arg, int unused) {
@@ -581,8 +570,8 @@ void manage_args(int argc, char *argv[]) {
 }
 
 void setup_daemonize() {
-  /* saves current path in pidfile_path, because otherwise with daemonize() we
-   * forget it */
+  /* saves current path in pidfile_path, because
+   * otherwise with daemonize() we forget it */
   if (getcwd(pidfile_path, _POSIX_PATH_MAX - 1) == NULL)
     printlog(LOG_ERR, "getcwd: %s", strerror(errno));
   strcat(pidfile_path, "/");

@@ -32,14 +32,13 @@
 #include <wolfssh/test.h>
 
 #define DEVPORT 2222
-#define SSH_PORT 22  // use this in
+#define SSH_PORT 22  // use this in production
 
 #define HIGHWATER_MARK_SZ 0x3FFF8000 /* 1GB - 32kB */
-#define SSH_BUFFER_SZ 4096
 #define LOADKEY_BUFFER_SZ 1200
 
-static const char serverBanner[] = "VDETELWEB SSH Server\n";
-int threadCount = 0;
+static const char ssh_banner[] = "VDETELWEB SSH Server\n";
+int thread_num = 0;
 WOLFSSH_CTX *ws_ctx = NULL;
 
 typedef struct {
@@ -71,7 +70,7 @@ static void ssh_showline(thread_ctx_t *ctx, byte *buf, int len, int indata) {
     wolfSSH_stream_send(ctx->ssh, buf, len);
 }
 
-static int ssh_getanswer(voidfun f, void *arg, int vdefd) {
+static void ssh_getanswer(voidfun f, void *arg, int vdefd) {
   char buf[BUFSIZE];
   char linebuf[BUFSIZE + 1];
   int n = 0, ib = 0, il = 0, indata = 0, eoa = 0;
@@ -106,7 +105,6 @@ static int ssh_getanswer(voidfun f, void *arg, int vdefd) {
       }
     }
   } while (!eoa);
-  return (eoa);
 }
 
 void close_sshclient(thread_ctx_t *ctx) {
@@ -132,7 +130,7 @@ static THREAD_RETURN server_worker(void *vArgs) {
       print_prompt(threadCtx);
 
     do {
-      buf_sz = SSH_BUFFER_SZ + backlogSz;
+      buf_sz = BUFSIZE + backlogSz;
       tmp_buf = (byte *)realloc(buf, buf_sz);
       if (tmp_buf == NULL)
         stop = 1;
@@ -141,7 +139,7 @@ static THREAD_RETURN server_worker(void *vArgs) {
 
       if (!stop) {
         do {
-          rxSz = wolfSSH_stream_read(threadCtx->ssh, buf, SSH_BUFFER_SZ);
+          rxSz = wolfSSH_stream_read(threadCtx->ssh, buf, BUFSIZE);
           if (rxSz <= 0)
             rxSz = wolfSSH_get_error(threadCtx->ssh);
         } while (rxSz == WS_WANT_READ || rxSz == WS_WANT_WRITE);
@@ -233,21 +231,21 @@ static THREAD_RETURN server_worker(void *vArgs) {
   return 0;
 }
 
-static int load_file(const char *fileName, byte *buf, word32 bufSz) {
+static int load_file(const char *filename, byte *buf, word32 buf_sz) {
   FILE *file;
   word32 fileSz;
   word32 readSz;
 
-  if (fileName == NULL)
+  if (filename == NULL)
     return 0;
 
-  if (WFOPEN(&file, fileName, "rb") != 0)
+  if (WFOPEN(&file, filename, "rb") != 0)
     return 0;
   fseek(file, 0, SEEK_END);
   fileSz = (word32)ftell(file);
   rewind(file);
 
-  if (fileSz > bufSz) {
+  if (fileSz > buf_sz) {
     fclose(file);
     return 0;
   }
@@ -262,17 +260,17 @@ static int load_file(const char *fileName, byte *buf, word32 bufSz) {
   return fileSz;
 }
 
-static int wsUserAuth(byte authType, WS_UserAuthData *authData, void *unused) {
+static int ws_user_auth(byte auth_type, WS_UserAuthData *auth_data, void *unused) {
   (void)unused;
-  if (authType != WOLFSSH_USERAUTH_PASSWORD)
+  if (auth_type != WOLFSSH_USERAUTH_PASSWORD)
     return WOLFSSH_USERAUTH_FAILURE;
 
-  if (authData->type != WOLFSSH_USERAUTH_PASSWORD)
+  if (auth_data->type != WOLFSSH_USERAUTH_PASSWORD)
     return WOLFSSH_USERAUTH_INVALID_AUTHTYPE;
 
-  if (is_usr_correct((char *)authData->username)) {
-    char *pwd = strdup((char *)authData->sf.password.password);
-    pwd[authData->sf.password.passwordSz] = '\0';
+  if (is_usr_correct((char *)auth_data->username)) {
+    char *pwd = strdup((char *)auth_data->sf.password.password);
+    pwd[auth_data->sf.password.passwordSz] = '\0';
     if (is_passwd_correct(pwd))
       return WOLFSSH_USERAUTH_SUCCESS;
     else
@@ -295,14 +293,13 @@ void init_wolfssh(const char *path) {
   if (ws_ctx == NULL)
     printlog(LOG_ERR, "Couldn't allocate SSH CTX data: %s", strerror(errno));
 
-  wolfSSH_SetUserAuth(ws_ctx, wsUserAuth);
-  wolfSSH_CTX_SetBanner(ws_ctx, serverBanner);
+  wolfSSH_SetUserAuth(ws_ctx, ws_user_auth);
+  wolfSSH_CTX_SetBanner(ws_ctx, ssh_banner);
 
   bufSz = load_file(path, buf, LOADKEY_BUFFER_SZ); // load key
   if (bufSz == 0)
     printlog(LOG_ERR, "Couldn't load key: %s", strerror(errno));
-  if (wolfSSH_CTX_UsePrivateKey_buffer(ws_ctx, buf, bufSz,
-                                       WOLFSSH_FORMAT_ASN1) < 0)
+  if (wolfSSH_CTX_UsePrivateKey_buffer(ws_ctx, buf, bufSz, WOLFSSH_FORMAT_ASN1) < 0)
     printlog(LOG_ERR, "Couldn't use key buffer: %s", strerror(errno));
 }
 
@@ -340,7 +337,7 @@ void ssh_accept(int fn, int fd, int vdefd) {
 
   threadCtx->ssh = ssh;
   threadCtx->fd = cli_fd;
-  threadCtx->id = threadCount++;
+  threadCtx->id = thread_num++;
 
   ThreadStart(server_worker, threadCtx, &thread);
   ThreadDetach(thread);

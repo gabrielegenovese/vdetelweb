@@ -11,7 +11,7 @@ extern void *status[];
 extern char *banner;
 extern char *prompt;
 
-int is_usr_correct(const char *ysr);
+int is_usr_correct(const char *usr);
 int is_passwd_correct(const char *pw);
 int addpfd(int fd, voidfun cb);
 void delpfd(int fn);

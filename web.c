@@ -549,6 +549,7 @@ int web_core(int fn, int fd, int vdefd) {
   } else if (strncmp(st->linebuf, "Authorization: Basic", 20) == 0) {
     char passwd_buf[BUFSIZE];
     char *passwd_buf_shift;
+    char usr_buf[BUFSIZ];
     int len = strlen(st->linebuf);
     int k = 20;
     while (st->linebuf[k] == ' ')
@@ -560,8 +561,19 @@ int web_core(int fn, int fd, int vdefd) {
     }
     /* SHA1 */
     decode64((st->linebuf + k), passwd_buf, strlen(st->linebuf + k));
-    passwd_buf_shift = (char *)(strchr(passwd_buf, ':') + 1);
-    if (is_passwd_correct(passwd_buf_shift))
+    // auth format = usr:pass
+    char *divisor = strchr(passwd_buf, ':');
+    char *tmp = passwd_buf;
+    int i = 0;
+    // getting usr
+    while (tmp != divisor) {
+      usr_buf[i++] = *tmp;
+      tmp++;
+    }
+    usr_buf[i] = '\0';
+    // get passwd
+    passwd_buf_shift = divisor + 1;
+    if (is_usr_correct(usr_buf) && is_passwd_correct(passwd_buf_shift))
       st->status = WEB_AUTHORIZED;
     return 0;
   } else if (st->linebuf[0] == '\n' || st->linebuf[0] == '\r') {
@@ -691,7 +703,7 @@ void web_init(struct ioth *iothsocket, int vdefd, char *cert, char *key) {
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   serv_addr.sin_port = is_ssl_enable
-                           ? htons(HTTPS_PORT)
+                           ? htons(DEVWEB_PORT)
                            : htons(HTTP_PORT); // todo: change the ports in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
