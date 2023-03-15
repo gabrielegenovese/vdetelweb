@@ -1,48 +1,29 @@
 /*
- *   VDETELWEB: VDE telnet and WEB interface
+ *   VDETELWEB: VDE telnet, SSH and WEB interface
  *
  *   telnet.c: telnet module
  *
  *   Copyright 2005,2007 Renzo Davoli University of Bologna - Italy
- *   migration from lwip to libioth by Gabriele Genovese 2023
+ *   2023 migration from lwip to libioth by Gabriele Genovese
  *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation, version 2 of the License.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License along
- *   with this program; if not, write to the Free Software Foundation, Inc.,
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ *   This program is free software: you can redistribute it and/or modify it under
+ *   the terms of the GNU General Public License as published by the Free Software
+ *   Foundation, either version 3 of the License, or (at your option) any later version.
+ *   
+ *   This program is distributed in the hope that it will be useful, but WITHOUT ANY
+ *   WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ *   PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ * 
+ *   You should have received a copy of the GNU General Public License along with this
+ *   program. If not, see <https://www.gnu.org/licenses/>.
  *
  *   $Id$
  *
  */
 #include "vdetelweb.h"
 #include <arpa/inet.h>
-#include <arpa/telnet.h>
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <ioth.h>
 #include <libvdehist.h>
-#include <linux/un.h>
-#include <netinet/in.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <syslog.h>
-#include <unistd.h>
 
 #define TELNET_PORT 23
 #define DEVTELNET_PORT 2323 // use this in development

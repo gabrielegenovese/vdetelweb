@@ -9,7 +9,7 @@
  *                            (copied from vde_switch code).
  *   2008 updated Renzo Davoli
  *   2008 sha1sum by Marco Dalla Via
- *   migration from lwip to libioth by Gabriele Genovese 2023
+ *   2023 migration from lwip to libioth by Gabriele Genovese
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -31,10 +31,8 @@
 #include "vdetelweb.h"
 #include <arpa/inet.h>
 #include <getopt.h>
-#include <ioth.h>
 #include <linux/un.h>
 #include <mhash.h>
-#include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <string.h>
 #include <sys/poll.h>
@@ -255,7 +253,9 @@ int open_vde_mgmt(char *mgmt) {
   set_prompt(ctrl, nodename);
 
   iothstack = ioth_newstack("vdestack", ctrl);
-  ifnet = ioth_if_nametoindex(iothstack, "vde0"); // todo: giusto mettere vde0?
+
+  if ((ifnet = ioth_if_nametoindex(iothstack, "vde0")) < 0)
+    printlog(LOG_ERR, "Ioth if name to index error %s", strerror(errno));
 
   if (ioth_linksetupdown(iothstack, ifnet, UP) < 0)
     printlog(LOG_ERR, "Error: link set up failed: %s", strerror(errno));

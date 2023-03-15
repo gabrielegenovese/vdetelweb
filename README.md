@@ -1,6 +1,6 @@
 # VDETELWEB
 
-### Telnet and WEB interface for VDE2
+### Telnet, SSH and WEB interface for VDE2
 
 Depends on the LWIPv6a library, available as a GPLv2 project from 
 `http://savannah.nongnu.org/projects/view-os`
@@ -50,3 +50,6 @@ Now it is possible to use telnet, ssh or a browser to manage the switch.
 
 (c) 2021 Renzo Davoli - Virtualsquare and CSE Department, University of Bologna.
 porting to cmake.
+
+(c) 2023 Renzo Davoli, Gabriele Genovese - Virtualsquare and CSE Department, University of Bologna.
+lwip to ioth migration, ssh module, https upgrade.

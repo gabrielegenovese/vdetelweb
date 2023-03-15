@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 project(vdetelweb
     VERSION 1.2.3
-    DESCRIPTION "Telnet and WEB interface for VDE2"
+    DESCRIPTION "Telnet SSH and WEB interface for VDE2"
     HOMEPAGE_URL "https://github.com/virtualsquare/vdetelweb"
     LANGUAGES C)
 

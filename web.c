@@ -1,5 +1,5 @@
 /*
- *   VDETELWEB: VDE telnet and WEB interface
+ *   VDETELWEB: VDE telnet, SSH and WEB interface
  *
  *   web.c: http micro server for vde mgmt
  *
@@ -9,19 +9,16 @@
  *   modified by Renzo Davoli 2008
  *   migration from lwip to ioth, https implementation by Gabriele Genovese 2023
  *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License along
- *   with this program; if not, write to the Free Software Foundation, Inc.,
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ *   This program is free software: you can redistribute it and/or modify it under
+ *   the terms of the GNU General Public License as published by the Free Software
+ *   Foundation, either version 3 of the License, or (at your option) any later version.
+ *   
+ *   This program is distributed in the hope that it will be useful, but WITHOUT ANY
+ *   WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ *   PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ * 
+ *   You should have received a copy of the GNU General Public License along with this
+ *   program. If not, see <https://www.gnu.org/licenses/>.
  *
  *   $Id$
  *
@@ -29,25 +26,8 @@
 #include "vdetelweb.h"
 #include <arpa/inet.h>
 #include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <ioth.h>
-#include <linux/un.h>
-#include <netinet/in.h>
-#include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <syslog.h>
-#include <unistd.h>
 
 #define HTTP_PORT 80
 #define HTTPS_PORT 443
@@ -682,8 +662,7 @@ void ssl_init(char *cert, char *key) {
 
   /* Check if the server certificate and private-key matches */
   if (!SSL_CTX_check_private_key(ctx))
-    printlog(LOG_ERR, "Certificate and private-key don't match",
-             strerror(errno));
+    printlog(LOG_ERR, "Certificate and private-key don't match", strerror(errno));
 }
 
 void web_init(struct ioth *iothsocket, int vdefd, char *cert, char *key) {
@@ -703,8 +682,8 @@ void web_init(struct ioth *iothsocket, int vdefd, char *cert, char *key) {
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   serv_addr.sin_port = is_ssl_enable
-                           ? htons(DEVWEB_PORT)
-                           : htons(HTTP_PORT); // todo: change the ports in prod/dev
+                          ? htons(DEVWEB_PORT) // check: bind di questa porta giusto??? il client si comporta male se uso questa porta
+                          : htons(HTTP_PORT); // todo: change the ports in prod/dev
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "web bind err: %s", strerror(errno));
