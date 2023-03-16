@@ -52,6 +52,7 @@ char *ssh_cert = NULL;
 char *key = NULL;
 char *ip = NULL;
 char *mgmt;
+char *stack;
 char *banner;
 char *progname;
 char *prompt;
@@ -252,10 +253,14 @@ int open_vde_mgmt(char *mgmt) {
   ctrl = line2 + 8;
   set_prompt(ctrl, nodename);
 
-  iothstack = ioth_newstack("vdestack", ctrl);
+  iothstack = ioth_newstack(stack, ctrl);
+  printf("ioth %p\n", iothstack);
+
+  if(iothstack == NULL)
+    printlog(LOG_ERR, "ioth_newstack error: %s", strerror(errno));
 
   if ((ifnet = ioth_if_nametoindex(iothstack, "vde0")) < 0)
-    printlog(LOG_ERR, "Ioth if name to index error %s", strerror(errno));
+    printlog(LOG_ERR, "ioth_if_nametoindex error: %s", strerror(errno));
 
   if (ioth_linksetupdown(iothstack, ifnet, UP) < 0)
     printlog(LOG_ERR, "Error: link set up failed: %s", strerror(errno));
@@ -500,6 +505,7 @@ void manage_args(int argc, char *argv[]) {
   while (1) {
     int option_index = 0;
     static struct option long_options[] = {{"daemon", 0, 0, 'd'},
+                                           {"stack", 1, 0, 'S'},
                                            {"mgmt", 1, 0, 'M'},
                                            {"telnet", 0, 0, 't'},
                                            {"ssh", 0, 0, 's'},
@@ -511,13 +517,16 @@ void manage_args(int argc, char *argv[]) {
                                            {"nodename", 1, 0, 'n'},
                                            {"pidfile", 1, 0, 'p'},
                                            {0, 0, 0, 0}};
-    int c = getopt_long_only(argc, argv, "hdwtsM:f:n:", long_options, &option_index);
+    int c = getopt_long_only(argc, argv, "hdwtsMS:f:n:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
       case 'M':
         mgmt = strdup(optarg);
+        break;
+      case 'S':
+        stack = strdup(optarg);
         break;
       case 'f':
         conffile = strdup(optarg);
