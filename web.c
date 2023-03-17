@@ -519,7 +519,7 @@ int web_core(int fn, int fd, int vdefd) {
     sscanf(st->linebuf + 4, "%s", st->path);
     st->op = WEB_OP_GET;
     return 0;
-  } else if (strncmp(st->linebuf, "POST", 3) == 0) {
+  } else if (strncmp(st->linebuf, "POST", 4) == 0) {
     sscanf(st->linebuf + 5, "%s", st->path);
     st->op = WEB_OP_POST;
     return 0;
@@ -616,12 +616,12 @@ void ssl_new_conn(int clisock) {
   /* Assign the socket into the SSL structure (SSL and socket without BIO) */
   int err = SSL_set_fd(ssl, clisock);
   if (err <= 0)
-    printlog(LOG_ERR, "Cannot set fd to ssl", strerror(errno));
+    printlog(LOG_ERR, "Cannot set fd to ssl: %s", strerror(errno));
 
   /* Perform SSL Handshake on the SSL server */
   err = SSL_accept(ssl);
   if (err <= 0)
-    printlog(LOG_ERR, "SSL accept error", strerror(errno));
+    printlog(LOG_ERR, "SSL accept error: %s", strerror(errno));
 }
 
 void webaccept(int fn, int fd, int vdefd) {

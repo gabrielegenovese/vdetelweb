@@ -1,9 +1,9 @@
 /*
- * VDETELWEB: VDE telnet, SSH and WEB interface
+ *   VDETELWEB: VDE telnet, SSH and WEB interface
  *
  *   ssh.c: ssh module
  *
- *   Copyright 2005,2007 Renzo Davoli University of Bologna - Italy
+ *   Copyright 2023 Renzo Davoli University of Bologna - Italy
  *   2023 made by Gabriele Genovese heavily inspired by ssh example of wolfssh lib
  *
  *   This program is free software: you can redistribute it and/or modify it under
@@ -113,6 +113,8 @@ void close_sshclient(thread_ctx_t *ctx) {
 
 static THREAD_RETURN server_worker(void *vArgs) {
   thread_ctx_t *threadCtx = (thread_ctx_t *)vArgs;
+  wolfSSH_SetIOReadCtx(threadCtx->ssh, (void *)&(threadCtx->fd));
+  wolfSSH_SetIOWriteCtx(threadCtx->ssh, (void *)&(threadCtx->fd));
 
   if (wolfSSH_accept(threadCtx->ssh) == WS_SUCCESS) {
     byte *buf = NULL;
@@ -222,7 +224,7 @@ static THREAD_RETURN server_worker(void *vArgs) {
 
     free(buf);
   } else
-    printlog(LOG_WARNING, "Couldn't connect to client");
+    printlog(LOG_WARNING, "Couldn't connect to client: %s", strerror(errno));
 
   close_sshclient(threadCtx);
   return 0;
@@ -276,6 +278,18 @@ static int ws_user_auth(byte auth_type, WS_UserAuthData *auth_data, void *unused
     return WOLFSSH_USERAUTH_INVALID_USER;
 }
 
+int custom_ssh_ioth_write(WOLFSSH* ssh, void* buf, word32 sz, void* ctx){
+  (void)ssh;
+  int cli_fd = *(int *)ctx;
+  return ioth_write(cli_fd, buf, sz);
+}
+
+int custom_ssh_ioth_read(WOLFSSH* ssh, void* buf, word32 sz, void* ctx){
+  (void)ssh;
+  int cli_fd = *(int *)ctx;
+  return ioth_read(cli_fd, buf, sz);
+}
+
 void init_wolfssh(const char *path) {
   if(path == NULL)
     printlog(LOG_ERR, "SSH path not set in config file");
@@ -292,6 +306,10 @@ void init_wolfssh(const char *path) {
 
   wolfSSH_SetUserAuth(ws_ctx, ws_user_auth);
   wolfSSH_CTX_SetBanner(ws_ctx, ssh_banner);
+
+  /* Register callbacks */
+  wolfSSH_SetIORecv(ws_ctx, custom_ssh_ioth_read);
+  wolfSSH_SetIOSend(ws_ctx, custom_ssh_ioth_write);
 
   bufSz = load_file(path, buf, LOADKEY_BUFFER_SZ); // load key
   if (bufSz == 0)

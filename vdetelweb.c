@@ -79,6 +79,7 @@ void *status[MAXFD];
 /* This will be prefixed by getenv("HOME") */
 #define USERCONFFILE "/.vde/vdetelwebrc"
 #define ROOTCONFFILE "/etc/vde/vdetelwebrc"
+#define SPDX_LICENSE "SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only"
 
 static char hex[] = "0123456789abcdef";
 
@@ -181,7 +182,7 @@ static void print_usage() {
           "Usage:\t%s\t[-w] [-t] [-d] [-n nodename] [-f rcfile] [-p pidfile] "
           "[-k privatekeyfile] [-c certificatefile] mgmt_socket\n"
           "\t%s\t[--web] [--telnet] [--daemon] [--nodename nodename] [--rcfile rcfile]\n"
-          "\t\t\t[--pidfile pidfile] [--key privatekeyfile] [--cert certificatefile] mgmt_socket\n",
+          "\t\t\t[--pidfile pidfile] [--key privatekeyfile] [--cert certificatefile] -S iothstack mgmt_socket\n",
           progname, progname);
   exit(-1);
 }
@@ -254,7 +255,7 @@ int open_vde_mgmt(char *mgmt) {
   set_prompt(ctrl, nodename);
 
   iothstack = ioth_newstack(stack, ctrl);
-  printf("ioth %p\n", iothstack);
+  // printf("ioth %p\n", iothstack);
 
   if(iothstack == NULL)
     printlog(LOG_ERR, "ioth_newstack error: %s", strerror(errno));
@@ -644,6 +645,8 @@ void start_daemon() {
 }
 
 int main(int argc, char *argv[]) {
+  ioth_set_license(SPDX_LICENSE);
+
   manage_args(argc, argv);
 
   if (daemonize)
