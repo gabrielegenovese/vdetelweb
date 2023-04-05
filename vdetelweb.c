@@ -33,7 +33,7 @@
 #include <getopt.h>
 #include <linux/un.h>
 #include <mhash.h>
-#include <openssl/ssl.h>
+#include <wolfssl/ssl.h>
 #include <string.h>
 #include <sys/poll.h>
 #include <sys/utsname.h>
@@ -63,8 +63,7 @@ static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
 struct ioth *iothstack;
 
-extern SSL *ssl;
-extern SSL_CTX *ctx;
+extern WOLFSSL_CTX *ctx;
 extern int is_ssl_enable;
 
 #define UP 1
@@ -110,10 +109,8 @@ static void cleanup() {
     ioth_delstack(iothstack);
   if ((pidfile != NULL) && unlink(pidfile_path) < 0)
     printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
-  if (is_ssl_enable) {
-    SSL_free(ssl);
-    SSL_CTX_free(ctx);
-  }
+  if (is_ssl_enable)
+    wolfSSL_CTX_free(ctx);
 }
 
 int is_usr_correct(const char *usr) {

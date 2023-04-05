@@ -12,7 +12,7 @@ include(CheckSymbolExists)
 add_definitions(-D_GNU_SOURCE)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_FORTIFY_SOURCE=2 -O2 -pedantic -Wall -Wextra")
 
-set(LIBS_REQUIRED ioth ssl wolfssh wolfssl crypto vdehist mhash)
+set(LIBS_REQUIRED ioth wolfssh wolfssl vdehist mhash)
 set(HEADERS_REQUIRED ioth.h libvdehist.h mhash.h)
 
 foreach(THISLIB IN LISTS LIBS_REQUIRED)
@@ -33,7 +33,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(vdetelweb vdetelweb.c web.c ssh.c telnet.c)
 target_include_directories(vdetelweb PRIVATE ${PROJECT_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-target_link_libraries(vdetelweb ioth vdehist ssl wolfssh wolfssl crypto mhash)
+target_link_libraries(vdetelweb ioth vdehist wolfssh wolfssl mhash)
 
 configure_file(config.h.in config.h)
 
