@@ -4,7 +4,7 @@
  *   ssh.c: ssh module
  *
  *   Copyright 2023 Renzo Davoli University of Bologna - Italy
- *   2023 made by Gabriele Genovese heavily inspired by ssh example of wolfssh lib
+ *   2023 made by Gabriele Genovese heavily inspired from the server example of wolfssh lib
  *
  *   This program is free software: you can redistribute it and/or modify it under
  *   the terms of the GNU General Public License as published by the Free Software
@@ -20,9 +20,6 @@
  *   $Id$
  *
  */
-#define WOLFSSH_TEST_SERVER
-#define WOLFSSH_TEST_THREADING
-
 #include "vdetelweb.h"
 #include <syslog.h>
 #include <wolfssh/ssh.h>
@@ -278,13 +275,13 @@ static int ws_user_auth(byte auth_type, WS_UserAuthData *auth_data, void *unused
     return WOLFSSH_USERAUTH_INVALID_USER;
 }
 
-int custom_ssh_ioth_write(WOLFSSH* ssh, void* buf, word32 sz, void* ctx){
+int custom_ssh_write(WOLFSSH* ssh, void* buf, word32 sz, void* ctx){
   (void)ssh;
   int cli_fd = *(int *)ctx;
   return ioth_write(cli_fd, buf, sz);
 }
 
-int custom_ssh_ioth_read(WOLFSSH* ssh, void* buf, word32 sz, void* ctx){
+int custom_ssh_read(WOLFSSH* ssh, void* buf, word32 sz, void* ctx){
   (void)ssh;
   int cli_fd = *(int *)ctx;
   return ioth_read(cli_fd, buf, sz);
@@ -308,8 +305,8 @@ void init_wolfssh(const char *path) {
   wolfSSH_CTX_SetBanner(ws_ctx, ssh_banner);
 
   /* Register callbacks */
-  wolfSSH_SetIORecv(ws_ctx, custom_ssh_ioth_read);
-  wolfSSH_SetIOSend(ws_ctx, custom_ssh_ioth_write);
+  wolfSSH_SetIORecv(ws_ctx, custom_ssh_read);
+  wolfSSH_SetIOSend(ws_ctx, custom_ssh_write);
 
   bufSz = load_file(path, buf, LOADKEY_BUFFER_SZ); // load key
   if (bufSz == 0)
@@ -354,8 +351,8 @@ void ssh_accept(int fn, int fd, int vdefd) {
   threadCtx->fd = cli_fd;
   threadCtx->id = thread_num++;
 
-  ThreadStart(server_worker, threadCtx, &thread);
-  ThreadDetach(thread);
+  pthread_create(&thread, 0, server_worker, threadCtx);
+  pthread_detach(thread);
 }
 
 void ssh_init(struct ioth *iothstack, const char *path) {

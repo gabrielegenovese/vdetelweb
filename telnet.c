@@ -4,7 +4,7 @@
  *   telnet.c: telnet module
  *
  *   Copyright 2005,2007 Renzo Davoli University of Bologna - Italy
- *   2023 migration from lwip to libioth by Gabriele Genovese
+ *   from lwip to libioth by Gabriele Genovese 2023
  *
  *   This program is free software: you can redistribute it and/or modify it under
  *   the terms of the GNU General Public License as published by the Free Software

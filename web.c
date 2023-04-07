@@ -96,9 +96,11 @@ static void ioth_printf(struct webstat *st, int fd, const char *format, ...) {
     ioth_write(fd, outbuf, strlen(outbuf));
 }
 
-static void web_close(int fn, int fd, struct webstat *st) {
-  wolfSSL_shutdown(st->ssl);
-  wolfSSL_free(st->ssl);
+static void webclose(int fn, int fd, struct webstat *st) {
+  if(is_ssl_enable) {
+    wolfSSL_shutdown(st->ssl);
+    wolfSSL_free(st->ssl);
+  }
   free(status[fn]);
   delpfd(pfdsearch(fd));
   ioth_close(fd);
@@ -432,12 +434,10 @@ static void web_menu_index(struct webstat *st, int fd) {
   struct vdemenu *this;
   ioth_printf(st, fd, "<P><A HREF=\"index.html\">Home Page</A></P>\r\n");
   for (this = menuhead; this != NULL; this = this->next)
-    ioth_printf(st, fd, "<P><A HREF=\"%s.html\">%s</A></P>\r\n", this->name,
-                this->name);
+    ioth_printf(st, fd, "<P><A HREF=\"%s.html\">%s</A></P>\r\n", this->name, this->name);
 }
 
-static void web_create_page(char *path, int fd, int vdefd, char *postdata,
-                            struct webstat *st) {
+static void web_create_page(char *path, int fd, int vdefd, char *postdata, struct webstat *st) {
   struct vdemenu *this = NULL;
   char *tail;
   ssize_t voidn;
@@ -512,7 +512,7 @@ static char authmsg2[] = "\"\r\n"
                          "<hr>\r\nVDE 2.0 WEB MGMT INTERFACE\r\n"
                          "</BODY></HTML>\r\n";
 
-int web_core(int fn, int fd, int vdefd) {
+int webcore(int fn, int fd, int vdefd) {
   struct webstat *st = status[fn];
   if (st->op == WEB_OP_POSTDATA) {
     web_create_page(&(st->path[1]), fd, vdefd, st->linebuf, st);
@@ -591,22 +591,19 @@ int web_core(int fn, int fd, int vdefd) {
 
 void webdata(int fn, int fd, int vdefd) {
   char buf[BUFSIZE];
-  int n, i;
+  int n = 0, i;
   struct webstat *st = status[fn];
-  wolfSSL_SetIOReadCtx(st->ssl, (void *)&fd);
-  wolfSSL_SetIOWriteCtx(st->ssl, (void *)&fd);
   n = is_ssl_enable ? wolfSSL_read(st->ssl, buf, BUFSIZE) : ioth_read(fd, buf, BUFSIZE);
-  if (n <= 0)
-    web_close(fn, fd, st);
+  if (n <= 0) 
+    webclose(fn, fd, st);
   else {
     buf[n] = '\0';
     for (i = 0; i < n && st->bufindex < BUFSIZE; i++) {
       st->linebuf[(st->bufindex)++] = buf[i];
-      if (buf[i] == '\n' ||
-          (st->op == WEB_OP_POSTDATA && st->bufindex == st->bodylen)) {
+      if (buf[i] == '\n' || (st->op == WEB_OP_POSTDATA && st->bufindex == st->bodylen)) {
         st->linebuf[(st->bufindex)] = 0;
-        if (web_core(fn, fd, vdefd)) {
-          web_close(fn, fd, st);
+        if (webcore(fn, fd, vdefd)) {
+          webclose(fn, fd, st);
           break;
         } else
           st->bufindex = 0;
@@ -615,21 +612,23 @@ void webdata(int fn, int fd, int vdefd) {
   }
 }
 
-int myIOread(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
-  (void)ssl;
-  int cli_fd = *(int *)ctx;
-  return ioth_read(cli_fd, buf, sz);
+int custom_ssl_read(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
+  (void)ctx;
+  int clifd = wolfSSL_get_fd(ssl);
+  int n = ioth_read(clifd, buf, sz);
+  return n == 0 ? -1 : n;
 }
 
-int myIOsend(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
-  (void)ssl;
-  int cli_fd = *(int *)ctx;
-  return ioth_write(cli_fd, buf, sz);
+int custom_ssl_send(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
+  (void)ctx;
+  int clifd = wolfSSL_get_fd(ssl);
+  int n = ioth_write(clifd, buf, sz);
+  return n == 0 ? -1 : n;
 }
 
 void ssl_new_conn(int clisock, struct webstat *st) {
   WOLFSSL *ssl = wolfSSL_new(ctx);
-  /* Assign the socket into the SSL structure (SSL and socket without BIO) */
+  /* Assign the socket into the SSL structure */
   int err = wolfSSL_set_fd(ssl, clisock);
   if (err <= 0)
     printlog(LOG_ERR, "Cannot set fd to ssl: %s", strerror(errno));
@@ -667,8 +666,8 @@ void webaccept(int fn, int fd, int vdefd) {
 void ssl_init(char *cert, char *key) {
   wolfSSL_Init();
   ctx = wolfSSL_CTX_new(wolfTLS_server_method());
-  wolfSSL_CTX_SetIORecv(ctx, myIOread);
-  wolfSSL_CTX_SetIOSend(ctx, myIOsend);
+  wolfSSL_CTX_SetIORecv(ctx, custom_ssl_read);
+  wolfSSL_CTX_SetIOSend(ctx, custom_ssl_send);
 
   /* Load the server certificate into the SSL_CTX structure */
   if (wolfSSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) <= 0)
