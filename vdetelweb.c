@@ -44,12 +44,13 @@ int daemonize;
 int ssh;
 int telnet;
 int web;
+int https;
 int vdefd;
 char *conffile = NULL;
 char *nodename = NULL;
-char *https_cert = NULL;
 char *ssh_cert = NULL;
-char *key = NULL;
+char *https_cert = NULL;
+char *https_key = NULL;
 char *ip = NULL;
 char *mgmt;
 char *stack;
@@ -64,10 +65,8 @@ static char pidfile_path[_POSIX_PATH_MAX];
 struct ioth *iothstack;
 
 extern WOLFSSL_CTX *ctx;
-extern int is_ssl_enable;
 
 #define UP 1
-#define DOWN 0
 #define MAXFD 16
 #define HASH_SIZE 40
 int npfd = 0;
@@ -109,7 +108,7 @@ static void cleanup() {
     ioth_delstack(iothstack);
   if ((pidfile != NULL) && unlink(pidfile_path) < 0)
     printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
-  if (is_ssl_enable)
+  if (https)
     wolfSSL_CTX_free(ctx);
 }
 
@@ -252,7 +251,6 @@ int open_vde_mgmt(char *mgmt) {
   set_prompt(ctrl, nodename);
 
   iothstack = ioth_newstack(stack, ctrl);
-  // printf("ioth %p\n", iothstack);
 
   if(iothstack == NULL)
     printlog(LOG_ERR, "ioth_newstack error: %s", strerror(errno));
@@ -261,7 +259,7 @@ int open_vde_mgmt(char *mgmt) {
     printlog(LOG_ERR, "ioth_if_nametoindex error: %s", strerror(errno));
 
   if (ioth_linksetupdown(iothstack, ifnet, UP) < 0)
-    printlog(LOG_ERR, "Error: link set up failed: %s", strerror(errno));
+    printlog(LOG_ERR, "link set up failed: %s", strerror(errno));
 
   return fd;
 }
@@ -335,9 +333,19 @@ static void read_pass(char *arg, int unused) {
     printlog(LOG_ERR, "Password must be set in the config file");
 }
 
-static void read_ssh_cert(char * arg, int unused) {
+static void read_ssh_cert(char *arg, int unused) {
   (void)unused;
   ssh_cert = strdup(arg);
+}
+
+static void read_https_cert(char *arg, int unused) {
+  (void)unused;
+  https_cert = strdup(arg);
+}
+
+static void read_https_key(char *arg, int unused) {
+  (void)unused;
+  https_key = strdup(arg);
 }
 
 int read_conffile(char *path) {
@@ -358,6 +366,8 @@ int read_conffile(char *path) {
              {"user", read_user, 0},
              {"password", read_pass, 0},
              {"sshcert", read_ssh_cert, 0},
+             {"httpscert", read_https_cert, 0},
+             {"httpskey", read_https_key, 0},
              {NULL, NULL, 0}};
 
   if (path == NULL)
@@ -502,20 +512,19 @@ void manage_args(int argc, char *argv[]) {
   progname = argv[0];
   while (1) {
     int option_index = 0;
-    static struct option long_options[] = {{"daemon", 0, 0, 'd'},
-                                           {"stack", 1, 0, 'S'},
-                                           {"mgmt", 1, 0, 'M'},
+    static struct option long_options[] = {{"mgmt", 1, 0, 'M'},
+                                           {"stack", 1, 0, 'i'},
+                                           {"rcfile", 1, 0, 'f'},
+                                           {"nodename", 1, 0, 'n'},
                                            {"telnet", 0, 0, 't'},
                                            {"ssh", 0, 0, 's'},
                                            {"web", 0, 0, 'w'},
-                                           {"help", 0, 0, 'h'},
-                                           {"rcfile", 1, 0, 'f'},
-                                           {"cert", 1, 0, 'c'},
-                                           {"key", 1, 0, 'k'},
-                                           {"nodename", 1, 0, 'n'},
+                                           {"https", 0, 0, 'S'},
+                                           {"daemon", 0, 0, 'd'},
                                            {"pidfile", 1, 0, 'p'},
+                                           {"help", 0, 0, 'h'},
                                            {0, 0, 0, 0}};
-    int c = getopt_long_only(argc, argv, "hdwtsMS:f:n:", long_options, &option_index);
+    int c = getopt_long_only(argc, argv, "hdwtsSM:i:f:n:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -523,7 +532,7 @@ void manage_args(int argc, char *argv[]) {
       case 'M':
         mgmt = strdup(optarg);
         break;
-      case 'S':
+      case 'i':
         stack = strdup(optarg);
         break;
       case 'f':
@@ -541,17 +550,14 @@ void manage_args(int argc, char *argv[]) {
       case 'w':
         web = 1;
         break;
+      case 'S':
+        https = 1;
+        break;
       case 'd':
         daemonize = 1;
         break;
       case 'p':
         pidfile = strdup(optarg);
-        break;
-      case 'c':
-        https_cert = strdup(optarg);
-        break;
-      case 'k':
-        key = strdup(optarg);
         break;
       case 'h':
         print_usage(); // implies exit
@@ -561,15 +567,9 @@ void manage_args(int argc, char *argv[]) {
   /* Check args */
   if (optind < argc && mgmt == NULL)
     mgmt = argv[optind];
-  if (https_cert != NULL || key != NULL) {
-    if (https_cert == NULL)
-      printlog(LOG_ERR, "certificate option must be defined if a private key is specified");
-    if (key == NULL)
-      printlog(LOG_ERR, "private key option must be defined if a certificate is specified");
-  }
   if (mgmt == NULL)
     printlog(LOG_ERR, "mgmt_socket not defined");
-  if (telnet == 0 && web == 0 && ssh == 0)
+  if (telnet == 0 && web == 0 && ssh == 0  && https == 0)
     printlog(LOG_ERR, "at least one service option (-t -w -s) must be specified");
 
   atexit(cleanup);
@@ -594,8 +594,8 @@ void handle(int vdefd) {
     printf("You can now connect with: telnet %s\n", ip);
   if (ssh)
     printf("You can now connect with: ssh %s@%s\n", user, ip);
-  if (web)
-    printf("You can now search in your browser http%c://%s\n", is_ssl_enable ? 's' : '\0', ip);
+  if (web || https)
+    printf("You can now search in your browser: http%c://%s\n", https ? 's' : '\0', ip);
   while (1) {
     int m = poll(pfd, npfd, -1);
     for (int i = 0; i < npfd && m > 0; i++) {
@@ -660,8 +660,9 @@ int main(int argc, char *argv[]) {
 
   if (telnet)
     telnet_init(iothstack);
-  if (web)
-    web_init(iothstack, vdefd, https_cert, key);
+  
+  if (web || https)
+    web_init(iothstack, vdefd, https_cert, https_key);
   if (ssh)
     ssh_init(iothstack, ssh_cert);
   if (daemonize)

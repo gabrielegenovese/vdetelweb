@@ -304,7 +304,6 @@ void init_wolfssh(const char *path) {
   wolfSSH_SetUserAuth(ws_ctx, ws_user_auth);
   wolfSSH_CTX_SetBanner(ws_ctx, ssh_banner);
 
-  /* Register callbacks */
   wolfSSH_SetIORecv(ws_ctx, custom_ssh_read);
   wolfSSH_SetIOSend(ws_ctx, custom_ssh_write);
 

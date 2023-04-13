@@ -15,6 +15,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_FORTIFY_SOURCE=2 -O2 -pedantic -Wall -Wex
 set(LIBS_REQUIRED ioth wolfssh wolfssl vdehist mhash)
 set(HEADERS_REQUIRED ioth.h libvdehist.h mhash.h)
 
+link_directories(/usr/local/lib)
+
 foreach(THISLIB IN LISTS LIBS_REQUIRED)
   find_library(LIB${THISLIB}_OK ${THISLIB})
   if(NOT LIB${THISLIB}_OK)
@@ -33,7 +35,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(vdetelweb vdetelweb.c web.c ssh.c telnet.c)
 target_include_directories(vdetelweb PRIVATE ${PROJECT_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-target_link_libraries(vdetelweb ioth vdehist wolfssh wolfssl mhash)
+target_link_libraries(vdetelweb ioth pthread vdehist wolfssh wolfssl mhash)
 
 configure_file(config.h.in config.h)
 

@@ -40,7 +40,7 @@
 #define WEB_OP_POST 0x1
 #define WEB_OP_POSTDATA 0x2
 
-int is_ssl_enable = false;
+extern int https;
 WOLFSSL_CTX *ctx;
 
 const char b64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -90,14 +90,14 @@ static void ioth_printf(struct webstat *st, int fd, const char *format, ...) {
   va_list arg;
   va_start(arg, format);
   vsnprintf(outbuf, BUFSIZE, format, arg);
-  if (is_ssl_enable)
+  if (https)
     wolfSSL_write(st->ssl, outbuf, strlen(outbuf));
   else
     ioth_write(fd, outbuf, strlen(outbuf));
 }
 
 static void webclose(int fn, int fd, struct webstat *st) {
-  if(is_ssl_enable) {
+  if(https) {
     wolfSSL_shutdown(st->ssl);
     wolfSSL_free(st->ssl);
   }
@@ -266,7 +266,7 @@ static struct vdemenu *vde_gethelp(int vdefd) {
 
 static void ioth_showline(int *fdp, char *buf, int len, int indata, struct webstat *st) {
   if (indata) {
-    if (is_ssl_enable)
+    if (https)
       wolfSSL_write(st->ssl, buf, len);
     else
       ioth_write(*fdp, buf, len);
@@ -445,7 +445,7 @@ static void web_create_page(char *path, int fd, int vdefd, char *postdata, struc
   if ((tail = strstr(path, ".html")) != NULL)
     *tail = 0;
   if (*path == 0 || ((this = vde_findmenu(menuhead, path)) != NULL)) {
-    if (is_ssl_enable)
+    if (https)
       wolfSSL_write(st->ssl, okmsg, sizeof(okmsg) - 1);
     else
       ioth_write(fd, okmsg, sizeof(okmsg) - 1);
@@ -453,7 +453,7 @@ static void web_create_page(char *path, int fd, int vdefd, char *postdata, struc
                 "<HTML><HEAD>\r\n"
                 "<TITLE>%s %s</TITLE>\r\n",
                 prompt, (*path == 0) ? "Home Page" : path);
-    if (is_ssl_enable)
+    if (https)
       wolfSSL_write(st->ssl, css, sizeof(css) - 1);
     else
       ioth_write(fd, okmsg, sizeof(okmsg) - 1);
@@ -491,7 +491,7 @@ static void web_create_page(char *path, int fd, int vdefd, char *postdata, struc
                 "<hr>VDE 2.0 WEB MGMT INTERFACE\r\n"
                 "</BODY></HTML>\r\n");
   } else {
-    if (is_ssl_enable)
+    if (https)
       wolfSSL_write(st->ssl, errmsg, sizeof(errmsg) - 1);
     else
       ioth_write(fd, errmsg, sizeof(errmsg) - 1);
@@ -561,7 +561,7 @@ int webcore(int fn, int fd, int vdefd) {
   } else if (st->linebuf[0] == '\n' || st->linebuf[0] == '\r') {
     switch (st->status) {
     case WEB_IDENTIFY:
-      if (is_ssl_enable) {
+      if (https) {
         wolfSSL_write(st->ssl, authmsg, sizeof(authmsg) - 1);
         wolfSSL_write(st->ssl, prompt, strlen(prompt));
         wolfSSL_write(st->ssl, authmsg2, sizeof(authmsg2) - 1);
@@ -593,7 +593,7 @@ void webdata(int fn, int fd, int vdefd) {
   char buf[BUFSIZE];
   int n = 0, i;
   struct webstat *st = status[fn];
-  n = is_ssl_enable ? wolfSSL_read(st->ssl, buf, BUFSIZE) : ioth_read(fd, buf, BUFSIZE);
+  n = https ? wolfSSL_read(st->ssl, buf, BUFSIZE) : ioth_read(fd, buf, BUFSIZE);
   if (n <= 0) 
     webclose(fn, fd, st);
   else {
@@ -616,7 +616,7 @@ int custom_ssl_read(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
   (void)ctx;
   int clifd = wolfSSL_get_fd(ssl);
   int n = ioth_read(clifd, buf, sz);
-  return n == 0 ? -1 : n;
+  return n == 0 ? -1 : n; // if it returns 0, wolfSSL_read will be stuck in a infinite loop
 }
 
 int custom_ssl_send(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
@@ -655,7 +655,7 @@ void webaccept(int fn, int fd, int vdefd) {
   newfn = addpfd(clisockfd, webdata);
   status[newfn] = st = malloc(sizeof(struct webstat));
 
-  if (is_ssl_enable)
+  if (https)
     ssl_new_conn(clisockfd, st);
 
   st->status = WEB_IDENTIFY;
@@ -690,15 +690,17 @@ void web_init(struct ioth *iothsocket, int vdefd, char *cert, char *key) {
     printlog(LOG_ERR, "web socket err: %s", strerror(errno));
 
   /* Check for ssl connection */
-  if (cert != NULL && key != NULL) {
-    is_ssl_enable = true;
-    ssl_init(cert, key);
+  if(https) {
+    if (cert != NULL && key != NULL) 
+      ssl_init(cert, key);
+    else
+      printlog(LOG_ERR, "certificate and priv key must be specified in the rc file, if https flag is setted");
   }
 
   bzero((char *)&serv_addr, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = is_ssl_enable ? htons(HTTPS_PORT) : htons(HTTP_PORT);
+  serv_addr.sin_port = https ? htons(HTTPS_PORT) : htons(HTTP_PORT);
 
   if (ioth_bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     printlog(LOG_ERR, "web bind err: %s", strerror(errno));
